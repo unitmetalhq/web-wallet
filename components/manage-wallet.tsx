@@ -1,8 +1,8 @@
 "use client";
 
-import { useAtomValue } from "jotai";
+import { useAtomValue, useSetAtom } from "jotai";
 import CreateWallet from "@/components/create-wallet";
-import type { UmKeystore } from '@/types/wallet';
+import type { UmKeystore } from "@/types/wallet";
 import {
   Select,
   SelectContent,
@@ -10,13 +10,23 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select"
+} from "@/components/ui/select";
 import { truncateAddress } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { walletsAtom } from "@/atoms/walletsAtom";
+import { activeWalletAtom } from "@/atoms/activeWalletAtom";
+import CopyButton from "@/components/copy-button";
 
 export default function ManageWallet() {
   const wallets = useAtomValue<Array<UmKeystore>>(walletsAtom);
+  const activeWallet = useAtomValue<UmKeystore | null>(activeWalletAtom);
+  const setActiveWallet = useSetAtom(activeWalletAtom);
+
+  function handleSelectWallet(address: string) {
+    setActiveWallet(
+      wallets.find((wallet) => wallet.address === address) || null
+    );
+  }
 
   return (
     <div className="flex flex-col border-2 border-primary gap-2 pb-8">
@@ -26,7 +36,7 @@ export default function ManageWallet() {
       {wallets && wallets.length > 0 ? (
         <div className="flex flex-col gap-4 px-4 py-2">
           <div className="flex flex-col gap-2">
-            <Select>
+            <Select onValueChange={handleSelectWallet}>
               <SelectTrigger className="w-full border-primary border rounded-none">
                 <SelectValue placeholder="Select a wallet" />
               </SelectTrigger>
@@ -36,7 +46,9 @@ export default function ManageWallet() {
                     <SelectItem key={wallet.address} value={wallet.address}>
                       <div className="flex flex-row gap-2">
                         <p>{wallet.name}</p>
-                        <p className="text-muted-foreground">{truncateAddress(wallet.address)}</p>
+                        <p className="text-muted-foreground">
+                          {truncateAddress(wallet.address)}
+                        </p>
                       </div>
                     </SelectItem>
                   ))}
@@ -45,15 +57,15 @@ export default function ManageWallet() {
             </Select>
           </div>
           <div className="flex flex-row gap-2">
-            <Button className="w-fit rounded-none hover:cursor-pointer">
-              Copy address
-            </Button>
+            <CopyButton text={activeWallet?.address || ""} />
             <Button className="w-fit rounded-none hover:cursor-pointer">
               QR
             </Button>
           </div>
           <div className="flex flex-col gap-2 mt-6 border-t-2 border-primary pt-4">
-            <h2 className="text-md font-bold">You can create a new wallet here</h2>
+            <h2 className="text-md font-bold">
+              You can create a new wallet here
+            </h2>
             <CreateWallet />
           </div>
         </div>
