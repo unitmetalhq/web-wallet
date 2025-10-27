@@ -30,7 +30,7 @@ export default function Balances() {
     data: balance,
     isLoading: isLoadingBalance,
     isError: isErrorBalance,
-    refetch,
+    refetch: refetchBalance,
   } = useBalance({
     address: activeWallet?.address as Address,
     chainId: activeChain as number,
@@ -66,7 +66,11 @@ export default function Balances() {
               </SelectGroup>
             </SelectContent>
           </Select>
-          <Button className="hover:cursor-pointer rounded-none" size="icon">
+          <Button
+            className="hover:cursor-pointer rounded-none"
+            size="icon"
+            onClick={() => refetchBalance()}
+          >
             <RefreshCcw />
           </Button>
         </div>
@@ -84,14 +88,14 @@ export default function Balances() {
             <div className="flex flex-row gap-2">
               <h3>
                 {
-                  config.chains.find((chain) => chain.id === activeChain)
-                    ?.nativeCurrency.name
+                  activeChain ? config.chains.find((chain) => chain.id === activeChain)
+                    ?.nativeCurrency.name : "Name"
                 }
               </h3>
               <h3 className="text-muted-foreground">
                 {
-                  config.chains.find((chain) => chain.id === activeChain)
-                    ?.nativeCurrency.symbol
+                  activeChain ? config.chains.find((chain) => chain.id === activeChain)
+                    ?.nativeCurrency.symbol : "Symbol"
                 }
               </h3>
             </div>
