@@ -5,6 +5,7 @@ import { mainnet, arbitrum, base, unichain } from "wagmi/chains";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createConfig, WagmiProvider, http } from "wagmi";
 import { ThemeProvider } from "@/components/theme-provider";
+import { Provider as JotaiProvider } from 'jotai'
 
 const config = createConfig({
   chains: [mainnet, base, arbitrum, unichain],
@@ -29,7 +30,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
     >
       <WagmiProvider config={config}>
         <QueryClientProvider client={queryClient}>
-          {children}
+          <JotaiProvider>
+            {children}
+          </JotaiProvider>
         </QueryClientProvider>
       </WagmiProvider>
     </ThemeProvider>
