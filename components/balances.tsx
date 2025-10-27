@@ -18,6 +18,8 @@ import { Badge } from "@/components/ui/badge";
 import { useConfig } from "wagmi";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatUnits } from "viem";
+import { Button } from "@/components/ui/button";
+import { RefreshCcw } from "lucide-react";
 
 export default function Balances() {
   const config = useConfig();
@@ -28,6 +30,7 @@ export default function Balances() {
     data: balance,
     isLoading: isLoadingBalance,
     isError: isErrorBalance,
+    refetch,
   } = useBalance({
     address: activeWallet?.address as Address,
     chainId: activeChain as number,
@@ -43,26 +46,38 @@ export default function Balances() {
         <h1 className="text-lg md:text-xl font-bold">Balances</h1>
       </div>
       <div className="flex flex-col gap-4 px-4 py-2">
-        <Select onValueChange={(value) => handleSelectChain(Number(value))}>
-          <SelectTrigger className="w-full border-primary border rounded-none">
-            <SelectValue placeholder="Select a chain" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectGroup>
-              {config.chains.map((chain) => (
-                <SelectItem key={chain.id} value={chain.id.toString()}>
-                  <div className="flex flex-row gap-2">
-                    <p>{chain.name}</p>
-                    <Badge className="rounded-none">
-                      {chain.id.toString()}
-                    </Badge>
-                  </div>
-                </SelectItem>
-              ))}
-            </SelectGroup>
-          </SelectContent>
-        </Select>
+        <div className="flex flex-row gap-2">
+          <Select onValueChange={(value) => handleSelectChain(Number(value))}>
+            <SelectTrigger className="w-full border-primary border rounded-none">
+              <SelectValue placeholder="Select a chain" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                {config.chains.map((chain) => (
+                  <SelectItem key={chain.id} value={chain.id.toString()}>
+                    <div className="flex flex-row gap-2">
+                      <p>{chain.name}</p>
+                      <Badge className="rounded-none">
+                        {chain.id.toString()}
+                      </Badge>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+          <Button className="hover:cursor-pointer rounded-none" size="icon">
+            <RefreshCcw />
+          </Button>
+        </div>
       </div>
+      {isErrorBalance && (
+        <div className="flex flex-col gap-4 px-4 py-2">
+          <div className="bg-destructive text-destructive-foreground p-2 rounded-none">
+            Error loading balance
+          </div>
+        </div>
+      )}
       <div className="flex flex-col gap-4 px-4 py-2">
         <div className="flex flex-row justify-between items-center gap-2">
           <div className="flex flex-col gap-1">
