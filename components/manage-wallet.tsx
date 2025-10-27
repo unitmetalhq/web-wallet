@@ -1,8 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useAtom } from "jotai";
-import { atomWithStorage } from "jotai/utils";
+import { useAtomValue } from "jotai";
 import CreateWallet from "@/components/create-wallet";
 import type { UmKeystore } from '@/types/wallet';
 import {
@@ -14,21 +12,20 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { truncateAddress } from "@/lib/utils";
-
-export const walletsAtom = atomWithStorage<Array<UmKeystore>>("wallets", []);
+import { Button } from "@/components/ui/button";
+import { walletsAtom } from "@/atoms/walletsAtom";
 
 export default function ManageWallet() {
-  const [wallets, setWallets] = useAtom<Array<UmKeystore>>(walletsAtom);
+  const wallets = useAtomValue<Array<UmKeystore>>(walletsAtom);
 
   return (
     <div className="flex flex-col border-2 border-primary gap-2 pb-8">
       <div className="flex flex-row justify-between items-center bg-primary text-secondary p-1">
-        <h1 className="text-lg md:text-xl font-bold">Manage</h1>
+        <h1 className="text-lg md:text-xl font-bold">Wallets</h1>
       </div>
       {wallets && wallets.length > 0 ? (
         <div className="flex flex-col gap-4 px-4 py-2">
           <div className="flex flex-col gap-2">
-            <h2 className="text-md font-bold">Wallets</h2>
             <Select>
               <SelectTrigger className="w-full border-primary border rounded-none">
                 <SelectValue placeholder="Select a wallet" />
@@ -47,8 +44,17 @@ export default function ManageWallet() {
               </SelectContent>
             </Select>
           </div>
-          <div className="flex flex-col gap-2">
-            <h2 className="text-md font-bold">New</h2>
+          <div className="flex flex-row gap-2">
+            <Button className="w-fit rounded-none hover:cursor-pointer">
+              Copy address
+            </Button>
+            <Button className="w-fit rounded-none hover:cursor-pointer">
+              QR
+            </Button>
+          </div>
+          <div className="flex flex-col gap-2 mt-6 border-t-2 border-primary pt-4">
+            <h2 className="text-md font-bold">You can create a new wallet here</h2>
+            <CreateWallet />
           </div>
         </div>
       ) : (

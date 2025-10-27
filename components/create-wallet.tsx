@@ -7,7 +7,7 @@ import type { AnyFieldApi } from "@tanstack/react-form";
 import { Loader2 } from "lucide-react";
 import { Mnemonic, Keystore, Bytes } from "ox";
 import { useSetAtom } from "jotai";
-import { walletsAtom } from "@/components/manage-wallet";
+import { walletsAtom } from "@/atoms/walletsAtom";
 import type { UmKeystore } from "@/types/wallet";
 import { mnemonicToAccount } from "viem/accounts";
 
