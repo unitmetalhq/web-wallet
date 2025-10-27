@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { useAtomValue } from "jotai";
 import type { UmKeystore } from "@/types/wallet";
 import { Button } from "@/components/ui/button";
@@ -15,13 +16,21 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
-import { Loader2 } from "lucide-react";
+import { Loader2, Check } from "lucide-react";
 import { parseEther, formatEther, isAddress, Address } from "viem";
-import { useConfig, useBalance } from "wagmi";
+import {
+  useConfig,
+  useBalance,
+  useSendTransaction,
+  useWaitForTransactionReceipt,
+} from "wagmi";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { activeWalletAtom } from "@/atoms/activeWalletAtom";
 import { Skeleton } from "@/components/ui/skeleton";
 import { RefreshCcw } from "lucide-react";
+import { Keystore, Bytes } from "ox";
+import { mnemonicToAccount } from "viem/accounts";
+import { truncateHash } from "@/lib/utils";
 
 export default function SendTokens() {
   // get Wagmi config
@@ -30,21 +39,67 @@ export default function SendTokens() {
   // check if desktop
   const isDesktop = useMediaQuery("(min-width: 768px)");
 
+  // Track selected chain separately for proper wagmi hook reactivity
+  const [selectedChainId, setSelectedChainId] = useState<number | undefined>(
+    undefined
+  );
+
+  const selectedChainBlockExplorer = config.chains.find(
+    (chain) => chain.id === selectedChainId
+  )?.blockExplorers?.default.url;
+
+  // current active wallet
+  const activeWallet = useAtomValue<UmKeystore | null>(activeWalletAtom);
+
   // send form
   const form = useForm({
     defaultValues: {
       receivingAddress: "",
       amount: "",
-      type: "",
-      gasPreset: "",
+      type: "native",
+      gasPreset: "normal",
       chain: "",
+      password: "",
     },
     onSubmit: async ({ value }) => {
       console.log(value);
+
+      if (value.type === "native") {
+        // check if there is an active wallet
+        if (!activeWallet) {
+          console.error("No active wallet");
+          return;
+        }
+
+        // duplicate the active wallet
+        const currentActiveWallet = activeWallet;
+
+        // Derive the key using your password.
+        const key = Keystore.toKey(currentActiveWallet, {
+          password: value.password,
+        });
+
+        // Decrypt the mnemonic.
+        const mnemonicHex = Keystore.decrypt(currentActiveWallet, key);
+
+        // Convert the mnemonicHex to mnemonicBytes.
+        const mnemonicBytes = Bytes.fromHex(mnemonicHex);
+
+        // Convert the mnemonicBytes to a mnemonic phrase
+        const mnemonicPhrase = Bytes.toString(mnemonicBytes);
+
+        // Convert the mnemonic phrase to an account
+        const account = mnemonicToAccount(mnemonicPhrase);
+
+        sendNativeTransaction({
+          account: account,
+          to: value.receivingAddress as Address,
+          value: parseEther(value.amount),
+          chainId: selectedChainId,
+        });
+      }
     },
   });
-
-  const activeWallet = useAtomValue<UmKeystore | null>(activeWalletAtom);
 
   const {
     data: nativeBalance,
@@ -52,7 +107,21 @@ export default function SendTokens() {
     refetch: refetchNativeBalance,
   } = useBalance({
     address: activeWallet?.address as Address,
-    chainId: form.state.values.chain ? Number(form.state.values.chain) : undefined,
+    chainId: selectedChainId,
+  });
+
+  const {
+    data: sendNativeTransactionHash,
+    isPending: isPendingSendNativeTransaction,
+    sendTransaction: sendNativeTransaction,
+  } = useSendTransaction();
+
+  const {
+    isLoading: isConfirmingSendNativeTransaction,
+    isSuccess: isConfirmedSendNativeTransaction,
+  } = useWaitForTransactionReceipt({
+    hash: sendNativeTransactionHash,
+    chainId: selectedChainId,
   });
 
   return (
@@ -73,6 +142,7 @@ export default function SendTokens() {
             <Select
               onValueChange={(value) => {
                 form.setFieldValue("chain", value);
+                setSelectedChainId(Number(value));
               }}
             >
               <SelectTrigger className="w-full border-primary border rounded-none">
@@ -90,9 +160,7 @@ export default function SendTokens() {
           <Tabs defaultValue="native" className="w-full">
             <TabsList className="border-primary border rounded-none">
               <TabsTrigger className="rounded-none" value="native">
-                <form.Subscribe
-                  selector={(state) => [state.values.chain]}
-                >
+                <form.Subscribe selector={(state) => [state.values.chain]}>
                   {([chainValue]) => {
                     const chain = config.chains.find(
                       (c) => c.id.toString() === chainValue
@@ -269,17 +337,7 @@ export default function SendTokens() {
           </Tabs>
           <div>
             {/* A type-safe field component*/}
-            <form.Field
-              name="gasPreset"
-              validators={{
-                onChange: ({ value }) =>
-                  !value
-                    ? "Please enter an amount to swap"
-                    : parseEther(value) < 0
-                    ? "Amount must be greater than 0"
-                    : undefined,
-              }}
-            >
+            <form.Field name="gasPreset">
               {(field) => (
                 <div className="flex flex-col gap-2">
                   <div className="flex flex-row gap-2 items-center justify-between">
@@ -288,19 +346,19 @@ export default function SendTokens() {
                   <div className="flex flex-row gap-4">
                     <button
                       className="hover:cursor-pointer underline underline-offset-4"
-                      onClick={() => field.handleChange("0.02")}
+                      onClick={() => field.handleChange("slow")}
                     >
                       Slow
                     </button>
                     <button
                       className="hover:cursor-pointer underline underline-offset-4"
-                      onClick={() => field.handleChange("0.1")}
+                      onClick={() => field.handleChange("normal")}
                     >
                       Normal
                     </button>
                     <button
                       className="hover:cursor-pointer underline underline-offset-4"
-                      onClick={() => field.handleChange("0.5")}
+                      onClick={() => field.handleChange("fast")}
                     >
                       Fast
                     </button>
@@ -309,21 +367,56 @@ export default function SendTokens() {
               )}
             </form.Field>
           </div>
+          <div className="border-t-2 border-primary pt-4">
+            <form.Field
+              name="password"
+              validators={{
+                onChange: ({ value }) =>
+                  !value ? "Please enter your wallet password" : undefined,
+              }}
+            >
+              {(field) => (
+                <div className="flex flex-col gap-2">
+                  <Input
+                    id={field.name}
+                    name={field.name}
+                    value={field.state.value || ""}
+                    onChange={(e) => field.handleChange(e.target.value)}
+                    className="rounded-none border-primary"
+                    type="password"
+                    placeholder="Password"
+                    required
+                  />
+                  <PasswordFieldInfo field={field} />
+                </div>
+              )}
+            </form.Field>
+          </div>
           <div className="flex flex-col gap-2">
             <form.Subscribe
-              selector={(state) => [state.canSubmit, state.isSubmitting]}
+              selector={(state) => [
+                state.canSubmit,
+                isPendingSendNativeTransaction,
+                isConfirmingSendNativeTransaction,
+              ]}
             >
-              {([canSubmit, isSubmitting]) => (
+              {([canSubmit, isPendingSendNativeTransaction,isConfirmingSendNativeTransaction]) => (
                 <Button
-                  size="lg"
                   className="hover:cursor-pointer text-lg font-bold rounded-none"
                   type="submit"
-                  disabled={!canSubmit || isSubmitting}
+                  disabled={!canSubmit || isPendingSendNativeTransaction || isConfirmingSendNativeTransaction}
                 >
-                  {isSubmitting ? (
+                  {isPendingSendNativeTransaction ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      Please confirm in wallet
+                    </>
+                  ) : isConfirmingSendNativeTransaction ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    </>
+                  ) : isConfirmedSendNativeTransaction ? (
+                    <>
+                      <Check className="w-4 h-4" />
                     </>
                   ) : (
                     <>Send</>
@@ -331,6 +424,23 @@ export default function SendTokens() {
                 </Button>
               )}
             </form.Subscribe>
+            <div>
+              {sendNativeTransactionHash && (
+                <div>
+                  <a
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline underline-offset-4 hover:cursor-pointer"
+                    href={`${selectedChainBlockExplorer}/tx/${sendNativeTransactionHash}`}
+                  >
+                    {truncateHash(sendNativeTransactionHash)}
+                  </a>
+                </div>
+              )}
+              {isPendingSendNativeTransaction && <div>Sending transaction...</div>}
+              {isConfirmingSendNativeTransaction && <div>Waiting for confirmation...</div>}
+              {isConfirmedSendNativeTransaction && <div>Transaction confirmed.</div>}
+            </div>
           </div>
         </div>
       </form>
@@ -372,6 +482,30 @@ function ReceivingAddressFieldInfo({ field }: { field: AnyFieldApi }) {
           className={`${
             field.state.meta.errors.join(",") ===
             "Please enter a recipient address"
+              ? ""
+              : "text-red-400"
+          }`}
+        >
+          {field.state.meta.errors.join(",")}
+        </em>
+      ) : (
+        <em className="text-green-500">ok!</em>
+      )}
+      {field.state.meta.isValidating ? "Validating..." : null}
+    </>
+  );
+}
+
+function PasswordFieldInfo({ field }: { field: AnyFieldApi }) {
+  return (
+    <>
+      {!field.state.meta.isTouched ? (
+        <em>Please enter your wallet password</em>
+      ) : field.state.meta.isTouched && !field.state.meta.isValid ? (
+        <em
+          className={`${
+            field.state.meta.errors.join(",") ===
+            "Please enter your wallet password"
               ? ""
               : "text-red-400"
           }`}

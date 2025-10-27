@@ -14,7 +14,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
 import { useConfig } from "wagmi";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatUnits } from "viem";
