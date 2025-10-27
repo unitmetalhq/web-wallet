@@ -56,10 +56,7 @@ export default function Balances() {
                 {config.chains.map((chain) => (
                   <SelectItem key={chain.id} value={chain.id.toString()}>
                     <div className="flex flex-row gap-2">
-                      <p>{chain.name}</p>
-                      <Badge className="rounded-none">
-                        {chain.id.toString()}
-                      </Badge>
+                      <div>{chain.name}</div>
                     </div>
                   </SelectItem>
                 ))}
