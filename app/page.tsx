@@ -1,6 +1,5 @@
 import ManageWallet from "@/components/manage-wallet";
 import SendTokens from "@/components/send-tokens";
-import BackupWallet from "@/components/backup-wallet";
 import Balances from "@/components/balances";
 
 export default function Home() {

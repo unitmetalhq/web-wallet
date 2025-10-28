@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+
 import { useAtomValue } from "jotai";
+import { useStore } from "@tanstack/react-form";
 import type { UmKeystore } from "@/types/wallet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,7 +17,7 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
-import { Loader2, Check } from "lucide-react";
+import { Loader2, Check, ExternalLink } from "lucide-react";
 import { parseEther, formatEther, isAddress, Address } from "viem";
 import {
   useConfig,
@@ -31,6 +32,7 @@ import { RefreshCcw } from "lucide-react";
 import { Keystore, Bytes } from "ox";
 import { mnemonicToAccount } from "viem/accounts";
 import { truncateHash } from "@/lib/utils";
+import CopyButton from "@/components/copy-button";
 
 export default function SendTokens() {
   // get Wagmi config
@@ -38,15 +40,6 @@ export default function SendTokens() {
 
   // check if desktop
   const isDesktop = useMediaQuery("(min-width: 768px)");
-
-  // Track selected chain separately for proper wagmi hook reactivity
-  const [selectedChainId, setSelectedChainId] = useState<number | undefined>(
-    undefined
-  );
-
-  const selectedChainBlockExplorer = config.chains.find(
-    (chain) => chain.id === selectedChainId
-  )?.blockExplorers?.default.url;
 
   // current active wallet
   const activeWallet = useAtomValue<UmKeystore | null>(activeWalletAtom);
@@ -95,7 +88,7 @@ export default function SendTokens() {
           account: account,
           to: value.receivingAddress as Address,
           value: parseEther(value.amount),
-          chainId: selectedChainId,
+          chainId: Number(form.state.values.chain),
         });
       }
     },
@@ -107,13 +100,14 @@ export default function SendTokens() {
     refetch: refetchNativeBalance,
   } = useBalance({
     address: activeWallet?.address as Address,
-    chainId: selectedChainId,
+    chainId: Number(useStore(form.store, (state) => state.values.chain)),
   });
 
   const {
     data: sendNativeTransactionHash,
     isPending: isPendingSendNativeTransaction,
     sendTransaction: sendNativeTransaction,
+    reset: resetSendNativeTransaction,
   } = useSendTransaction();
 
   const {
@@ -121,13 +115,22 @@ export default function SendTokens() {
     isSuccess: isConfirmedSendNativeTransaction,
   } = useWaitForTransactionReceipt({
     hash: sendNativeTransactionHash,
-    chainId: selectedChainId,
+    chainId: Number(useStore(form.store, (state) => state.values.chain)),
   });
+
+  const selectedChainBlockExplorer = config.chains.find(
+    (chain) => chain.id.toString() === form.state.values.chain
+  )?.blockExplorers?.default.url;
+
+  function handleReset() {
+    resetSendNativeTransaction();
+    form.reset();
+  }
 
   return (
     <div className="flex flex-col border-2 border-primary gap-2 pb-8">
       <div className="flex flex-row justify-between items-center bg-primary text-secondary p-1">
-        <h1 className="text-lg md:text-xl font-bold">Send</h1>
+        <h1 className="text-lg font-bold">Send</h1>
       </div>
       <form
         onSubmit={(e) => {
@@ -140,9 +143,9 @@ export default function SendTokens() {
           <div className="flex flex-col gap-2">
             <Label htmlFor="select-chain">Chain</Label>
             <Select
+              value={form.state.values.chain}
               onValueChange={(value) => {
                 form.setFieldValue("chain", value);
-                setSelectedChainId(Number(value));
               }}
             >
               <SelectTrigger className="w-full border-primary border rounded-none">
@@ -367,7 +370,7 @@ export default function SendTokens() {
               )}
             </form.Field>
           </div>
-          <div className="border-t-2 border-primary pt-4">
+          <div className="border-t-2 border-primary pt-4 border-dotted">
             <form.Field
               name="password"
               validators={{
@@ -400,46 +403,100 @@ export default function SendTokens() {
                 isConfirmingSendNativeTransaction,
               ]}
             >
-              {([canSubmit, isPendingSendNativeTransaction,isConfirmingSendNativeTransaction]) => (
-                <Button
-                  className="hover:cursor-pointer text-lg font-bold rounded-none"
-                  type="submit"
-                  disabled={!canSubmit || isPendingSendNativeTransaction || isConfirmingSendNativeTransaction}
-                >
-                  {isPendingSendNativeTransaction ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    </>
-                  ) : isConfirmingSendNativeTransaction ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    </>
-                  ) : isConfirmedSendNativeTransaction ? (
-                    <>
-                      <Check className="w-4 h-4" />
-                    </>
-                  ) : (
-                    <>Send</>
-                  )}
-                </Button>
-              )}
-            </form.Subscribe>
-            <div>
-              {sendNativeTransactionHash && (
-                <div>
-                  <a
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="underline underline-offset-4 hover:cursor-pointer"
-                    href={`${selectedChainBlockExplorer}/tx/${sendNativeTransactionHash}`}
+              {([
+                canSubmit,
+                isPendingSendNativeTransaction,
+                isConfirmingSendNativeTransaction,
+              ]) => (
+                <div className="grid grid-cols-3 gap-2">
+                  <Button
+                    className="hover:cursor-pointer rounded-none col-span-1"
+                    variant="outline"
+                    type="reset"
+                    disabled={
+                      !canSubmit ||
+                      isPendingSendNativeTransaction ||
+                      isConfirmingSendNativeTransaction
+                    }
+                    onClick={handleReset}
                   >
-                    {truncateHash(sendNativeTransactionHash)}
-                  </a>
+                    Reset
+                  </Button>
+                  <Button
+                    className="hover:cursor-pointer rounded-none col-span-2"
+                    type="submit"
+                    disabled={
+                      !canSubmit ||
+                      isPendingSendNativeTransaction ||
+                      isConfirmingSendNativeTransaction
+                    }
+                  >
+                    {isPendingSendNativeTransaction ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      </>
+                    ) : isConfirmingSendNativeTransaction ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      </>
+                    ) : isConfirmedSendNativeTransaction ? (
+                      <>
+                        <Check className="w-4 h-4" />
+                      </>
+                    ) : (
+                      <>Send</>
+                    )}
+                  </Button>
                 </div>
               )}
-              {isPendingSendNativeTransaction && <div>Sending transaction...</div>}
-              {isConfirmingSendNativeTransaction && <div>Waiting for confirmation...</div>}
-              {isConfirmedSendNativeTransaction && <div>Transaction confirmed.</div>}
+            </form.Subscribe>
+            <div className="border-t-2 border-primary pt-4 mt-4">
+              <div className="flex flex-col gap-1">
+                <div className="flex flex-row gap-2 items-center">
+                  {isPendingSendNativeTransaction ? (
+                    <div className="flex flex-row gap-2 items-center">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <p>Signing transaction...</p>
+                    </div>
+                  ) : isConfirmingSendNativeTransaction ? (
+                    <div className="flex flex-row gap-2 items-center">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <p>Confirming transaction...</p>
+                    </div>
+                  ) : isConfirmedSendNativeTransaction ? (
+                    <div className="flex flex-row gap-2 items-center">
+                      <Check className="w-4 h-4" />
+                      <p>Transaction confirmed</p>
+                    </div>
+                  ) : (
+                    <div className="flex flex-row gap-2 items-center">
+                      <p className="text-muted-foreground">&gt;</p>
+                      <p>No pending transaction</p>
+                    </div>
+                  )}
+                </div>
+                {sendNativeTransactionHash ? (
+                  <div className="flex flex-row gap-2 items-center">
+                    <p className="text-muted-foreground">&gt;</p>
+                    <a
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="underline underline-offset-4 hover:cursor-pointer"
+                      href={`${selectedChainBlockExplorer}/tx/${sendNativeTransactionHash}`}
+                    >
+                      <div className="flex flex-row gap-2 items-center">
+                        {truncateHash(sendNativeTransactionHash)}
+                        <ExternalLink className="w-4 h-4" />
+                      </div>
+                    </a>
+                  </div>
+                ) : (
+                  <div className="flex flex-row gap-2 items-center">
+                    <p className="text-muted-foreground">&gt;</p>
+                    <p>No transaction hash</p>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
