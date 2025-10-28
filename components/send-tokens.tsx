@@ -32,7 +32,7 @@ import { RefreshCcw } from "lucide-react";
 import { Keystore, Bytes } from "ox";
 import { mnemonicToAccount } from "viem/accounts";
 import { truncateHash } from "@/lib/utils";
-import CopyButton from "@/components/copy-button";
+
 
 export default function SendTokens() {
   // get Wagmi config
