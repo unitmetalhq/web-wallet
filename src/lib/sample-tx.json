@@ -1,0 +1,22 @@
+{
+  "chain": 84532,
+  "to": "0x90544e6cddA697E042199f6652986fb94386BF37",
+  "value": "0",
+  "data": "0xa9059cbb000000000000000000000000d8da6bf26964af9d7eed9e03e53415d37aa960450000000000000000000000000000000000000000000000000de0b6b3a7640000",
+  "inputs": {
+    "description": "Transfer 1 token to 0xe3d25540BA6CED36a0ED5ce899b99B5963f43d3F",
+    "action": "transfer",
+    "params": [
+      {
+        "name": "recipient",
+        "value": "0xe3d25540BA6CED36a0ED5ce899b99B5963f43d3F",
+        "type": "address"
+      },
+      {
+        "name": "amount",
+        "value": "1000000000000000000",
+        "type": "uint256"
+      }
+    ]
+  }
+}

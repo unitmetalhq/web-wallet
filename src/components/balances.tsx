@@ -25,6 +25,7 @@ export default function Balances() {
   const [activeChain, setActiveChain] = useState<number | null>(null);
   const activeWallet = useAtomValue<UmKeystore | null>(activeWalletAtom);
 
+  const chainItems = config.chains.map((chain) => ({ label: chain.name, value: chain.id.toString() }));
 
   // check if balance query should be enabled
   const isBalanceQueryEnabled = !!activeWallet?.address && !!activeChain;
@@ -50,15 +51,15 @@ export default function Balances() {
   return (
     <div className="flex flex-col border-2 border-primary gap-2 pb-8">
       <div className="flex flex-row justify-between items-center bg-primary text-secondary p-1">
-        <h1 className="text-lg font-bold">Balances</h1>
+        <h1 className="text-md font-bold">Balances</h1>
       </div>
       <div className="flex flex-col gap-4 px-4 py-2">
         <div className="flex flex-row gap-2">
-          <Select onValueChange={(value) => handleSelectChain(Number(value))}>
+          <Select items={chainItems} onValueChange={(value) => handleSelectChain(Number(value))}>
             <SelectTrigger className="w-full border-primary border rounded-none">
               <SelectValue placeholder="Select a chain" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent alignItemWithTrigger={false}>
               <SelectGroup>
                 {config.chains.map((chain) => (
                   <SelectItem key={chain.id} value={chain.id.toString()}>
