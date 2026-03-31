@@ -26,11 +26,7 @@ import { Keystore, Bytes } from "ox";
 import { mnemonicToAccount } from "viem/accounts";
 import { truncateHash } from "@/lib/utils";
 
-export default function SendErc20TokenForm({
-  selectedChain,
-}: {
-  selectedChain: number | null;
-}) {
+export default function SendErc20TokenForm() {
   // get Wagmi config
   const config = useConfig();
 
@@ -47,9 +43,9 @@ export default function SendErc20TokenForm({
     refetch: refetchGasPrice,
   } = useGasPrice({
     query: {
-      enabled: !!selectedChain,
+      enabled: !!activeWallet?.address,
     },
-    chainId: selectedChain || undefined,
+    chainId: 1,
   });
 
   // send form
@@ -115,7 +111,7 @@ export default function SendErc20TokenForm({
           abi: erc20Abi,
           functionName: "transfer",
           args: [recipientAddress, parseUnits(value.amount, tokenData?.[3]?.result || 18)],
-          chainId: selectedChain || undefined,
+          chainId: 1,
         });
       }
     },
@@ -173,7 +169,7 @@ export default function SendErc20TokenForm({
   });
 
   // check if balance query should be enabled
-  const isBalanceQueryEnabled = !!selectedChain && !!activeWallet?.address;
+  const isBalanceQueryEnabled = !!activeWallet?.address;
 
   const {
     data: tokenData,
@@ -186,25 +182,25 @@ export default function SendErc20TokenForm({
         abi: erc20Abi,
         functionName: "balanceOf",
         args: [activeWallet?.address as Address],
-        chainId: selectedChain || undefined,
+        chainId: 1,
       },
       {
         address: tokenAddress.endsWith(".eth") ? tokenEnsAddress as Address : tokenAddress as Address,
         abi: erc20Abi,
         functionName: "name",
-        chainId: selectedChain || undefined,
+        chainId: 1,
       },
       {
         address: tokenAddress.endsWith(".eth") ? tokenEnsAddress as Address : tokenAddress as Address,
         abi: erc20Abi,
         functionName: "symbol",
-        chainId: selectedChain || undefined,
+        chainId: 1,
       },
       {
         address: tokenAddress.endsWith(".eth") ? tokenEnsAddress as Address : tokenAddress as Address,
         abi: erc20Abi,
         functionName: "decimals",
-        chainId: selectedChain || undefined,
+        chainId: 1,
       },
     ],
     query: {
@@ -226,11 +222,11 @@ export default function SendErc20TokenForm({
     isSuccess: isConfirmedSendErc20Transaction,
   } = useWaitForTransactionReceipt({
     hash: sendErc20TransactionHash,
-    chainId: selectedChain || undefined,
+    chainId: 1,
   });
 
   const selectedChainBlockExplorer = config.chains.find(
-    (chain) => chain.id.toString() === selectedChain?.toString()
+    (chain) => chain.id === 1
   )?.blockExplorers?.default.url;
 
   function handleReset() {
@@ -247,7 +243,7 @@ export default function SendErc20TokenForm({
 
     // refetch the native balance
     refetchTokenData();
-  }, [selectedChain, resetSendErc20Transaction, form, refetchTokenData]);
+  }, [resetSendErc20Transaction, form, refetchTokenData]);
 
   return (
     <form

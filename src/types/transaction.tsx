@@ -1,19 +1,13 @@
-export interface TransactionParam {
-  name: string;
-  value: string;
-  type: string;
-}
-
-export interface TransactionInputs {
-  description: string;
-  action: string;
-  params: TransactionParam[];
-}
-
-export interface TransactionExport {
-  chain: number;
+export interface WagmiPreparedTransaction {
   to: string;
   value?: string;
+  account?: string;
+  from?: string;
+  type?: string;
+  chainId: number;
+  gas?: string;
+  nonce?: number;
+  maxFeePerGas?: string;
+  maxPriorityFeePerGas?: string;
   data?: string;
-  inputs: TransactionInputs;
 }

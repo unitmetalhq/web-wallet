@@ -1,34 +1,32 @@
-"use client";
-
-import { useState } from "react";
+// import { useState } from "react";
 import { useAtomValue } from "jotai";
 import type { UmKeystore } from "@/types/wallet";
 import { activeWalletAtom } from "@/atoms/activeWalletAtom";
 import { useBalance } from "wagmi";
 import type { Address } from "viem";
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { useConfig } from "wagmi";
+// import {
+//   Select,
+//   SelectContent,
+//   SelectGroup,
+//   SelectItem,
+//   SelectTrigger,
+//   SelectValue,
+// } from "@/components/ui/select";
+// import { useConfig } from "wagmi";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatUnits } from "viem";
 import { Button } from "@/components/ui/button";
 import { RefreshCcw } from "lucide-react";
 
 export default function Balances() {
-  const config = useConfig();
-  const [activeChain, setActiveChain] = useState<number | null>(null);
+  // const config = useConfig();
+  // const [activeChain, setActiveChain] = useState<number | null>(null);
   const activeWallet = useAtomValue<UmKeystore | null>(activeWalletAtom);
 
-  const chainItems = config.chains.map((chain) => ({ label: chain.name, value: chain.id.toString() }));
+  // const chainItems = config.chains.map((chain) => ({ label: chain.name, value: chain.id.toString() }));
 
   // check if balance query should be enabled
-  const isBalanceQueryEnabled = !!activeWallet?.address && !!activeChain;
+  const isBalanceQueryEnabled = !!activeWallet?.address;
 
   const {
     data: balance,
@@ -41,12 +39,12 @@ export default function Balances() {
       refetchOnMount: false,
     },
     address: (activeWallet?.address as Address) || undefined,
-    chainId: activeChain as number,
+    chainId: 1,
   });
 
-  function handleSelectChain(chainId: number) {
-    setActiveChain(chainId);
-  }
+  // function handleSelectChain(chainId: number) {
+  //   setActiveChain(chainId);
+  // }
 
   return (
     <div className="flex flex-col border-2 border-primary gap-2 pb-8">
@@ -55,7 +53,7 @@ export default function Balances() {
       </div>
       <div className="flex flex-col gap-4 px-4 py-2">
         <div className="flex flex-row gap-2">
-          <Select items={chainItems} onValueChange={(value) => handleSelectChain(Number(value))}>
+          {/* <Select items={chainItems} onValueChange={(value) => handleSelectChain(Number(value))}>
             <SelectTrigger className="w-full border-primary border rounded-none">
               <SelectValue placeholder="Select a chain" />
             </SelectTrigger>
@@ -70,7 +68,7 @@ export default function Balances() {
                 ))}
               </SelectGroup>
             </SelectContent>
-          </Select>
+          </Select> */}
           <Button
             className="hover:cursor-pointer rounded-none"
             size="icon"
@@ -92,16 +90,10 @@ export default function Balances() {
           <div className="flex flex-col gap-1">
             <div className="flex flex-row gap-2">
               <h3>
-                {
-                  activeChain ? config.chains.find((chain) => chain.id === activeChain)
-                    ?.nativeCurrency.name : "Name"
-                }
+                Ether
               </h3>
               <h3 className="text-muted-foreground">
-                {
-                  activeChain ? config.chains.find((chain) => chain.id === activeChain)
-                    ?.nativeCurrency.symbol : "Symbol"
-                }
+                ETH
               </h3>
             </div>
             <div className="flex flex-row gap-2 items-center">

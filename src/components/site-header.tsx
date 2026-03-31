@@ -1,4 +1,4 @@
-import { ModeToggle } from "@/components/theme-toggle";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 export default function SiteHeader() {
   return (
@@ -13,11 +13,11 @@ export default function SiteHeader() {
             className="max-w-48 dark:invert"
           />
         </a>
-        <ModeToggle />
+        <ThemeToggle />
       </div>
-      <div className="flex flex-row gap-2 items-center justify-center bg-amber-400 text-black">
+      {/* <div className="flex flex-row gap-2 items-center justify-center bg-amber-400 text-black">
         Experimental software
-      </div>
+      </div> */}
     </div>
   );
 }

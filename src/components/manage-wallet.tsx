@@ -1,5 +1,3 @@
-"use client";
-
 import { useAtomValue, useSetAtom } from "jotai";
 import CreateWallet from "@/components/create-wallet";
 import type { UmKeystore } from "@/types/wallet";

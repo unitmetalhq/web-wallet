@@ -27,11 +27,7 @@ import { Keystore, Bytes } from "ox";
 import { mnemonicToAccount } from "viem/accounts";
 import { truncateHash } from "@/lib/utils";
 
-export default function SendNativeTokenForm({
-  selectedChain,
-}: {
-  selectedChain: number | null;
-}) {
+export default function SendNativeTokenForm() {
   // get Wagmi config
   const config = useConfig();
 
@@ -48,9 +44,9 @@ export default function SendNativeTokenForm({
     refetch: refetchGasPrice,
   } = useGasPrice({
     query: {
-      enabled: !!selectedChain,
+      enabled: !!activeWallet?.address,
     },
-    chainId: selectedChain || undefined,
+    chainId: 1,
   });
 
   // send form
@@ -113,7 +109,7 @@ export default function SendNativeTokenForm({
           account: account,
           to: recipientAddress,
           value: parseEther(value.amount),
-          chainId: selectedChain || undefined,
+          chainId: 1,
           gasPrice: value.gasPreset
             ? parseEther(value.gasPreset, "gwei")
             : undefined,
@@ -145,7 +141,7 @@ export default function SendNativeTokenForm({
   });
 
   // check if balance query should be enabled
-  const isBalanceQueryEnabled = !!selectedChain && !!activeWallet?.address;
+  const isBalanceQueryEnabled = !!activeWallet?.address;
 
   // get native balance
   const {
@@ -157,7 +153,7 @@ export default function SendNativeTokenForm({
       enabled: isBalanceQueryEnabled,
     },
     address: (activeWallet?.address as Address) || undefined,
-    chainId: selectedChain || undefined,
+    chainId: 1,
   });
 
   // hook to send native transaction
@@ -174,11 +170,11 @@ export default function SendNativeTokenForm({
     isSuccess: isConfirmedSendNativeTransaction,
   } = useWaitForTransactionReceipt({
     hash: sendNativeTransactionHash,
-    chainId: selectedChain || undefined,
+    chainId: 1,
   });
 
   const selectedChainBlockExplorer = config.chains.find(
-    (chain) => chain.id.toString() === selectedChain?.toString()
+    (chain) => chain.id === 1
   )?.blockExplorers?.default.url;
 
   function handleReset() {
@@ -195,7 +191,7 @@ export default function SendNativeTokenForm({
 
     // refetch the native balance
     refetchNativeBalance();
-  }, [selectedChain, resetSendNativeTransaction, form, refetchNativeBalance]);
+  }, [resetSendNativeTransaction, form, refetchNativeBalance]);
 
   return (
     <form
@@ -342,15 +338,7 @@ export default function SendNativeTokenForm({
                         formatEther(nativeBalance?.value || BigInt(0))
                       )}
                     </div>
-                    {selectedChain ? (
-                      <p className="text-muted-foreground">
-                        {config.chains.find(
-                          (c) => c.id.toString() === selectedChain?.toString()
-                        )?.nativeCurrency.symbol || "Native"}
-                      </p>
-                    ) : (
-                      <p className="text-muted-foreground">Native</p>
-                    )}
+                    <p className="text-muted-foreground">ETH</p>
                   </div>
                   <Button
                     variant="ghost"

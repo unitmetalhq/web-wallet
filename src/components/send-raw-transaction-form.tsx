@@ -1,74 +1,46 @@
-"use client";
-
 import { useEffect, useMemo } from "react";
 import { useAtomValue } from "jotai";
 import type { UmKeystore } from "@/types/wallet";
-import type { TransactionExport } from "@/types/transaction";
+import type { WagmiPreparedTransaction } from "@/types/transaction";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useForm } from "@tanstack/react-form";
 import type { AnyFieldApi } from "@tanstack/react-form";
 import { Loader2, Check, ExternalLink } from "lucide-react";
-import { type Address, type Hex } from "viem";
+import { type Address, type Hex, hexToBigInt } from "viem";
 import {
   useConfig,
   useWaitForTransactionReceipt,
   useSendTransaction,
 } from "wagmi";
-import { prepareTransactionRequest } from "wagmi/actions";
 import { activeWalletAtom } from "@/atoms/activeWalletAtom";
 import { Keystore, Bytes } from "ox";
 import { mnemonicToAccount } from "viem/accounts";
 import { truncateAddress, truncateHash } from "@/lib/utils";
 
-function validateTransactionExport(value: string): TransactionExport | string {
+function validateTransaction(value: string): WagmiPreparedTransaction | string {
   if (!value) {
     return "Please enter the transaction JSON";
   }
   try {
     const parsed = JSON.parse(value);
-    if (typeof parsed.chain !== "number") {
-      return "Missing or invalid 'chain' (must be a number)";
-    }
     if (!parsed.to || typeof parsed.to !== "string") {
       return "Missing 'to' address";
     }
-    if (!parsed.inputs || typeof parsed.inputs !== "object") {
-      return "Missing 'inputs' object";
+    if (typeof parsed.chainId !== "number") {
+      return "Missing or invalid 'chainId' (must be a number)";
     }
-    if (!parsed.inputs.description || typeof parsed.inputs.description !== "string") {
-      return "Missing 'inputs.description'";
-    }
-    if (!parsed.inputs.action || typeof parsed.inputs.action !== "string") {
-      return "Missing 'inputs.action'";
-    }
-    if (!Array.isArray(parsed.inputs.params)) {
-      return "Missing 'inputs.params' array";
-    }
-    for (const param of parsed.inputs.params) {
-      if (!param.name || !param.value || !param.type) {
-        return "Each param must have 'name', 'value', and 'type'";
-      }
-    }
-    return parsed as TransactionExport;
+    return parsed as WagmiPreparedTransaction;
   } catch {
     return "Invalid JSON format";
   }
 }
 
-export default function SendRawTransactionForm({
-  selectedChain,
-}: {
-  selectedChain: number | null;
-}) {
-  // get Wagmi config
+export default function SendRawTransactionForm() {
   const config = useConfig();
-
-  // current active wallet
   const activeWallet = useAtomValue<UmKeystore | null>(activeWalletAtom);
 
-  // hook to send transaction
   const {
     data: rawTransactionHash,
     isPending: isPendingRawTransaction,
@@ -76,90 +48,69 @@ export default function SendRawTransactionForm({
     reset: resetSendTransaction,
   } = useSendTransaction();
 
-  // send form
   const form = useForm({
     defaultValues: {
       rawTransactionData: "",
       password: "",
     },
     onSubmit: async ({ value }) => {
-      // check if there is an active wallet
       if (!activeWallet) {
         console.error("No active wallet");
         return;
       }
 
-      // Parse and validate the transaction data
-      const parsed = validateTransactionExport(value.rawTransactionData);
+      const parsed = validateTransaction(value.rawTransactionData);
       if (typeof parsed === "string") {
         console.error(parsed);
         return;
       }
 
-      // Derive the key using your password.
-      const key = Keystore.toKey(activeWallet, {
-        password: value.password,
-      });
-
-      // Decrypt the mnemonic.
+      const key = Keystore.toKey(activeWallet, { password: value.password });
       const mnemonicHex = Keystore.decrypt(activeWallet, key);
-
-      // Convert the mnemonicHex to mnemonicBytes.
       const mnemonicBytes = Bytes.fromHex(mnemonicHex);
-
-      // Convert the mnemonicBytes to a mnemonic phrase
       const mnemonicPhrase = Bytes.toString(mnemonicBytes);
-
-      // Convert the mnemonic phrase to an account
       const account = mnemonicToAccount(mnemonicPhrase);
 
-      // Use chain from the transaction JSON
-      const chainId = parsed.chain;
-
-      // Prepare the transaction request (gas estimation, nonce, etc.)
-      const prepared = await prepareTransactionRequest(config, {
+      sendTransaction({
         account,
         to: parsed.to as Address,
-        value: parsed.value ? BigInt(parsed.value) : undefined,
+        value: parsed.value ? hexToBigInt(parsed.value as Hex) : undefined,
         data: parsed.data as Hex | undefined,
-        chainId,
-      });
-
-      // Send the prepared transaction
-      sendTransaction({
-        ...prepared,
-        account,
-        chainId,
+        chainId: parsed.chainId,
+        gas: parsed.gas ? hexToBigInt(parsed.gas as Hex) : undefined,
+        nonce: parsed.nonce,
+        maxFeePerGas: parsed.maxFeePerGas ? hexToBigInt(parsed.maxFeePerGas as Hex) : undefined,
+        maxPriorityFeePerGas: parsed.maxPriorityFeePerGas ? hexToBigInt(parsed.maxPriorityFeePerGas as Hex) : undefined,
+        type: "eip1559",
       });
     },
   });
 
-  // Parse the transaction for display
   const parsedTransaction = useMemo(() => {
     const value = form.state.values.rawTransactionData;
     if (!value) return null;
-    const result = validateTransactionExport(value);
+    const result = validateTransaction(value);
     if (typeof result === "string") return null;
     return result;
   }, [form.state.values.rawTransactionData]);
 
-  // Get chain name from config
   const getChainName = (chainId: number) => {
     const chain = config.chains.find((c) => c.id === chainId);
     return chain?.name ?? `Chain ${chainId}`;
   };
 
-  // hook to wait for transaction receipt
+  const txChainId = parsedTransaction?.chainId ?? 1;
+
   const {
     isLoading: isConfirmingRawTransaction,
     isSuccess: isConfirmedRawTransaction,
   } = useWaitForTransactionReceipt({
     hash: rawTransactionHash,
-    chainId: parsedTransaction?.chain || selectedChain || undefined,
+    chainId: txChainId,
   });
 
   const transactionChainBlockExplorer = config.chains.find(
-    (chain) => chain.id === (parsedTransaction?.chain || selectedChain)
+    (chain) => chain.id === txChainId
   )?.blockExplorers?.default.url;
 
   function handleReset() {
@@ -168,11 +119,9 @@ export default function SendRawTransactionForm({
   }
 
   useEffect(() => {
-    // reset the transaction state
     resetSendTransaction();
-    // reset the form values
     form.reset();
-  }, [selectedChain, form, resetSendTransaction]);
+  }, [form, resetSendTransaction]);
 
   return (
     <form
@@ -188,7 +137,7 @@ export default function SendRawTransactionForm({
             name="rawTransactionData"
             validators={{
               onChange: ({ value }) => {
-                const result = validateTransactionExport(value);
+                const result = validateTransaction(value);
                 if (typeof result === "string") {
                   return result;
                 }
@@ -208,7 +157,7 @@ export default function SendRawTransactionForm({
                     value={field.state.value || ""}
                     onChange={(e) => field.handleChange(e.target.value)}
                     className="rounded-none"
-                    placeholder='{"chain": 1, "to": "0x...", "value": "0", "data": "0x...", "inputs": {"description": "...", "action": "...", "params": [...]}}'
+                    placeholder='{"to": "0x...", "chainId": 1, "type": "eip1559", "gas": "0x...", "maxFeePerGas": "0x...", "maxPriorityFeePerGas": "0x..."}'
                     required
                   />
                 </div>
@@ -223,42 +172,58 @@ export default function SendRawTransactionForm({
               <div className="border-b border-primary pb-2">
                 <p className="font-medium">Transaction Details</p>
               </div>
-              <div className="border-b border-primary pb-3">
-                <p className="text-md">{parsedTransaction.inputs.description}</p>
-              </div>
               <div className="flex flex-col gap-1 text-sm">
                 <div className="flex flex-row gap-2">
-                  <span className="text-muted-foreground">Action:</span>
-                  <span className="font-mono">{parsedTransaction.inputs.action}</span>
-                </div>
-                <div className="flex flex-row gap-2">
                   <span className="text-muted-foreground">Chain:</span>
-                  <span>{getChainName(parsedTransaction.chain)}</span>
+                  <span>{getChainName(parsedTransaction.chainId)}</span>
                 </div>
                 <div className="flex flex-row gap-2">
-                  <span className="text-muted-foreground">Contract:</span>
-                  <span className="font-mono text-md">{truncateAddress(parsedTransaction.to)}</span>
+                  <span className="text-muted-foreground">To:</span>
+                  <span className="font-mono">{truncateAddress(parsedTransaction.to as Address)}</span>
                 </div>
-                {parsedTransaction.value && parsedTransaction.value !== "0" && (
+                {parsedTransaction.from && (
+                  <div className="flex flex-row gap-2">
+                    <span className="text-muted-foreground">From:</span>
+                    <span className="font-mono">{truncateAddress(parsedTransaction.from as Address)}</span>
+                  </div>
+                )}
+                {parsedTransaction.value && parsedTransaction.value !== "0x0" && (
                   <div className="flex flex-row gap-2">
                     <span className="text-muted-foreground">Value:</span>
-                    <span className="font-mono text-md">{parsedTransaction.value} wei</span>
+                    <span className="font-mono">{parsedTransaction.value}</span>
+                  </div>
+                )}
+                {parsedTransaction.type && (
+                  <div className="flex flex-row gap-2">
+                    <span className="text-muted-foreground">Type:</span>
+                    <span className="font-mono">{parsedTransaction.type}</span>
+                  </div>
+                )}
+                {parsedTransaction.gas && (
+                  <div className="flex flex-row gap-2">
+                    <span className="text-muted-foreground">Gas:</span>
+                    <span className="font-mono">{parsedTransaction.gas}</span>
+                  </div>
+                )}
+                {parsedTransaction.nonce !== undefined && (
+                  <div className="flex flex-row gap-2">
+                    <span className="text-muted-foreground">Nonce:</span>
+                    <span className="font-mono">{parsedTransaction.nonce}</span>
+                  </div>
+                )}
+                {parsedTransaction.maxFeePerGas && (
+                  <div className="flex flex-row gap-2">
+                    <span className="text-muted-foreground">Max Fee Per Gas:</span>
+                    <span className="font-mono">{parsedTransaction.maxFeePerGas}</span>
+                  </div>
+                )}
+                {parsedTransaction.maxPriorityFeePerGas && (
+                  <div className="flex flex-row gap-2">
+                    <span className="text-muted-foreground">Max Priority Fee:</span>
+                    <span className="font-mono">{parsedTransaction.maxPriorityFeePerGas}</span>
                   </div>
                 )}
               </div>
-              {parsedTransaction.inputs.params.length > 0 && (
-                <div className="flex flex-col gap-1 text-sm border-t border-primary pt-3">
-                  <p className="text-muted-foreground">Parameters:</p>
-                  <div className="flex flex-col gap-1 pl-2">
-                    {parsedTransaction.inputs.params.map((param, index) => (
-                      <div key={index} className="flex flex-row gap-2">
-                        <span className="text-muted-foreground text-md">{param.name}:</span>
-                        <span className="font-mono text-wrap text-md">{param.value}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
           </div>
         )}
@@ -324,17 +289,11 @@ export default function SendRawTransactionForm({
                   }
                 >
                   {isPendingRawTransaction ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    </>
+                    <Loader2 className="w-4 h-4 animate-spin" />
                   ) : isConfirmingRawTransaction ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    </>
+                    <Loader2 className="w-4 h-4 animate-spin" />
                   ) : isConfirmedRawTransaction ? (
-                    <>
-                      <Check className="w-4 h-4" />
-                    </>
+                    <Check className="w-4 h-4" />
                   ) : (
                     <>Send</>
                   )}
@@ -396,11 +355,7 @@ export default function SendRawTransactionForm({
   );
 }
 
-function RawTransactionDataFieldInfo({
-  field,
-}: {
-  field: AnyFieldApi;
-}) {
+function RawTransactionDataFieldInfo({ field }: { field: AnyFieldApi }) {
   return (
     <>
       {!field.state.meta.isTouched ? (
