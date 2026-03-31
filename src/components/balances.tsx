@@ -48,7 +48,7 @@ export default function Balances() {
 
   return (
     <div className="flex flex-col border-2 border-primary gap-2 pb-8">
-      <div className="flex flex-row justify-between items-center bg-primary text-secondary p-1">
+      <div className="flex flex-row justify-between items-center bg-primary text-secondary pl-1">
         <h1 className="text-md font-bold">Balances</h1>
       </div>
       <div className="flex flex-col gap-4 px-4 py-2">
