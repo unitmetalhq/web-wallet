@@ -1,30 +1,21 @@
-"use client";
-
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect } from "react";
 import { useAtomValue } from "jotai";
 import type { UmKeystore } from "@/types/wallet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupButton,
-  InputGroupInput,
-} from "@/components/ui/input-group";
 import { useForm, useStore } from "@tanstack/react-form";
 import type { AnyFieldApi } from "@tanstack/react-form";
-import { Loader2, Check, ExternalLink, Search, QrCode, X } from "lucide-react";
-import QrScanner from "qr-scanner";
-import { parseEther, formatEther, type Address } from "viem";
-
+import { Loader2, Check, ExternalLink, Search } from "lucide-react";
+import { type Address, erc721Abi } from "viem";
 import {
   useConfig,
-  useBalance,
-  useSendTransaction,
   useWaitForTransactionReceipt,
   useGasPrice,
   useEnsAddress,
+  useReadContracts,
+  useWriteContract
 } from "wagmi";
+import { formatEther } from "viem";
 import { normalize } from "viem/ens";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { activeWalletAtom } from "@/atoms/activeWalletAtom";
@@ -34,57 +25,12 @@ import { Keystore, Bytes } from "ox";
 import { mnemonicToAccount } from "viem/accounts";
 import { truncateHash } from "@/lib/utils";
 
-/**
- * Parses an address out of QR code data, handling:
- *   - Plain address:        0xABC...  (non-checksum or checksum)
- *   - ERC-3770 short name:  eth:0xABC...
- *   - CAIP-10 / EIP-155:   eip155:1:0xABC...
- *   - EIP-681 URI:          ethereum:0xABC...@1/transfer?...
- *
- * Returns the raw address string (preserving checksum if present) or null.
- */
-function parseQrAddress(raw: string): string | null {
-  let candidate = raw.trim();
-
-  // Strip any scheme prefix before the address: "eth:", "eip155:1:", "ethereum:", etc.
-  // Strategy: if there's a colon, take the last colon-delimited segment.
-  if (candidate.includes(":")) {
-    const parts = candidate.split(":");
-    candidate = parts[parts.length - 1];
-  }
-
-  // Strip EIP-681 suffixes: @chainId, /functionName, ?params
-  candidate = candidate.split("@")[0].split("/")[0].split("?")[0];
-
-  // Validate: 0x followed by exactly 40 hex characters
-  if (/^0x[0-9a-fA-F]{40}$/.test(candidate)) {
-    return candidate;
-  }
-
-  return null;
-}
-
-export default function SendNativeTokenForm() {
+export default function SendErc721TokenForm() {
   // get Wagmi config
   const config = useConfig();
 
   // check if desktop
   const isDesktop = useMediaQuery("(min-width: 768px)");
-
-  // QR scanner
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const scannerRef = useRef<QrScanner | null>(null);
-  const [isScanning, setIsScanning] = useState(false);
-
-  const stopScanner = useCallback(() => {
-    scannerRef.current?.stop();
-    scannerRef.current?.destroy();
-    scannerRef.current = null;
-    setIsScanning(false);
-  }, []);
-
-  // Destroy scanner on unmount
-  useEffect(() => () => stopScanner(), [stopScanner]);
 
   // current active wallet
   const activeWallet = useAtomValue<UmKeystore | null>(activeWalletAtom);
@@ -104,18 +50,17 @@ export default function SendNativeTokenForm() {
   // send form
   const form = useForm({
     defaultValues: {
+      tokenAddress: "",
+      tokenId: "",
       receivingAddress: "",
-      amount: "",
-      type: "native",
+      type: "erc721",
       gasPreset: formatEther(gasPriceData || BigInt(0), "gwei") || "0",
       chain: "",
       password: "",
       message: "",
     },
     onSubmit: async ({ value }) => {
-      // console.log(value);
-
-      if (value.type === "native") {
+      if (value.type === "erc721") {
         // check if there is an active wallet
         if (!activeWallet) {
           console.error("No active wallet");
@@ -145,8 +90,6 @@ export default function SendNativeTokenForm() {
         // resolve ENS to address if needed
         let recipientAddress: Address;
         if (value.receivingAddress.endsWith(".eth")) {
-          // Get the resolved ENS address from the form state
-          // We need to resolve it here if not already resolved
           if (!ensAddress) {
             console.error("ENS address not resolved");
             return;
@@ -156,19 +99,53 @@ export default function SendNativeTokenForm() {
           recipientAddress = value.receivingAddress as Address;
         }
 
-        // execute the send native transaction
-        sendNativeTransaction({
+        const contractAddress = tokenAddress.endsWith(".eth")
+          ? (tokenEnsAddress as Address)
+          : (tokenAddress as Address);
+
+        // execute the safeTransferFrom transaction
+        sendErc721Transaction({
           account: account,
-          to: recipientAddress,
-          value: parseEther(value.amount),
+          address: contractAddress,
+          abi: erc721Abi,
+          functionName: "safeTransferFrom",
+          args: [account.address, recipientAddress, BigInt(value.tokenId)],
           chainId: 1,
-          gasPrice: value.gasPreset
-            ? parseEther(value.gasPreset, "gwei")
-            : undefined,
         });
       }
     },
   });
+
+  // get token address reactively from form store
+  const tokenAddress = useStore(
+    form.store,
+    (state) => state.values.tokenAddress || ""
+  );
+
+  // get ENS address for token contract
+  const {
+    data: tokenEnsAddress,
+    isLoading: isLoadingTokenEnsAddress,
+    isError: isErrorTokenEnsAddress,
+    refetch: refetchTokenEnsAddress,
+  } = useEnsAddress({
+    chainId: 1,
+    name:
+      tokenAddress &&
+      tokenAddress.endsWith(".eth") &&
+      (tokenAddress.split(".")[0] !== "" || tokenAddress.split(".")[1] !== "")
+        ? normalize(tokenAddress)
+        : undefined,
+    query: {
+      enabled: false,
+    },
+  });
+
+  // get tokenId reactively from form store
+  const tokenId = useStore(
+    form.store,
+    (state) => state.values.tokenId || ""
+  );
 
   // get receiving address reactively from form store
   const receivingAddress = useStore(
@@ -176,7 +153,7 @@ export default function SendNativeTokenForm() {
     (state) => state.values.receivingAddress || ""
   );
 
-  // get ENS address
+  // get ENS address for recipient
   const {
     data: ensAddress,
     isLoading: isLoadingEnsAddress,
@@ -184,44 +161,71 @@ export default function SendNativeTokenForm() {
     refetch: refetchEnsAddress,
   } = useEnsAddress({
     chainId: 1,
-    name: receivingAddress && receivingAddress.endsWith(".eth") && (receivingAddress.split(".")[0] !== "" || receivingAddress.split(".")[1] !== "")
-      ? normalize(receivingAddress)
-      : undefined,
+    name:
+      receivingAddress &&
+      receivingAddress.endsWith(".eth") &&
+      (receivingAddress.split(".")[0] !== "" ||
+        receivingAddress.split(".")[1] !== "")
+        ? normalize(receivingAddress)
+        : undefined,
     query: {
       enabled: false,
     },
   });
 
-  // check if balance query should be enabled
-  const isBalanceQueryEnabled = !!activeWallet?.address;
+  const resolvedTokenAddress = tokenAddress.endsWith(".eth")
+    ? (tokenEnsAddress as Address)
+    : (tokenAddress as Address);
 
-  // get native balance
+  const isBalanceQueryEnabled = !!activeWallet?.address;
+  const isTokenIdQueryEnabled =
+    isBalanceQueryEnabled && !!tokenId && !isNaN(Number(tokenId));
+
   const {
-    data: nativeBalance,
-    isLoading: isLoadingNativeBalance,
-    refetch: refetchNativeBalance,
-  } = useBalance({
+    data: tokenData,
+    isLoading: isLoadingTokenData,
+    refetch: refetchTokenData,
+  } = useReadContracts({
+    contracts: [
+      {
+        address: resolvedTokenAddress,
+        abi: erc721Abi,
+        functionName: "name",
+        chainId: 1,
+      },
+      {
+        address: resolvedTokenAddress,
+        abi: erc721Abi,
+        functionName: "symbol",
+        chainId: 1,
+      },
+      {
+        address: resolvedTokenAddress,
+        abi: erc721Abi,
+        functionName: "ownerOf",
+        args: isTokenIdQueryEnabled ? [BigInt(tokenId)] : [BigInt(0)],
+        chainId: 1,
+      },
+    ],
     query: {
       enabled: isBalanceQueryEnabled,
     },
-    address: (activeWallet?.address as Address) || undefined,
-    chainId: 1,
   });
 
-  // hook to send native transaction
+  // hook to send ERC721 transaction
   const {
-    data: sendNativeTransactionHash,
-    isPending: isPendingSendNativeTransaction,
-    sendTransaction: sendNativeTransaction,
-    reset: resetSendNativeTransaction,
-  } = useSendTransaction();
+    data: sendErc721TransactionHash,
+    isPending: isPendingSendErc721Transaction,
+    writeContract: sendErc721Transaction,
+    reset: resetSendErc721Transaction,
+  } = useWriteContract();
 
   // hook to wait for transaction receipt
   const {
-    isLoading: isConfirmingSendNativeTransaction,
-    isSuccess: isConfirmedSendNativeTransaction,
+    isLoading: isConfirmingSendErc721Transaction,
+    isSuccess: isConfirmedSendErc721Transaction,
   } = useWaitForTransactionReceipt({
-    hash: sendNativeTransactionHash,
+    hash: sendErc721TransactionHash,
     chainId: 1,
   });
 
@@ -230,20 +234,22 @@ export default function SendNativeTokenForm() {
   )?.blockExplorers?.default.url;
 
   function handleReset() {
-    resetSendNativeTransaction();
+    resetSendErc721Transaction();
     form.reset();
   }
 
   useEffect(() => {
-    // reset the transaction state
-    resetSendNativeTransaction();
-
-    // reset the form values
+    resetSendErc721Transaction();
     form.reset();
+    refetchTokenData();
+  }, [resetSendErc721Transaction, form, refetchTokenData]);
 
-    // refetch the native balance
-    refetchNativeBalance();
-  }, [resetSendNativeTransaction, form, refetchNativeBalance]);
+  // check if the active wallet owns the tokenId
+  const ownerOf = tokenData?.[2]?.result as Address | undefined;
+  const isOwner =
+    ownerOf &&
+    activeWallet?.address &&
+    ownerOf.toLowerCase() === activeWallet.address.toLowerCase();
 
   return (
     <form
@@ -254,42 +260,15 @@ export default function SendNativeTokenForm() {
       }}
     >
       <div className="flex flex-col gap-4">
-        {/* send native form*/}
+        {/* token contract address */}
         <div>
           <form.Field
-            name="amount"
+            name="tokenAddress"
             validators={{
               onChange: ({ value }) => {
-                // Check if empty
                 if (!value) {
-                  return "Please enter an amount to send";
+                  return "Please enter a token address";
                 }
-
-                // Convert to number and check if it's valid
-                const numValue = parseFloat(value);
-                if (isNaN(numValue)) {
-                  return "Please enter a valid number";
-                }
-
-                // Check if negative
-                if (numValue <= 0) {
-                  return "Amount must be greater than 0";
-                }
-
-                // Try to parse ether and check balance
-                try {
-                  const valueInWei = parseEther(value);
-                  if (
-                    nativeBalance?.value &&
-                    valueInWei > nativeBalance.value
-                  ) {
-                    return "Insufficient balance";
-                  }
-                } catch {
-                  // Handle parseEther errors for invalid decimal places
-                  return "Invalid amount format";
-                }
-
                 return undefined;
               },
             }}
@@ -297,62 +276,72 @@ export default function SendNativeTokenForm() {
             {(field) => (
               <div className="flex flex-col gap-2">
                 <div className="flex flex-row gap-2 items-center justify-between">
-                  <p className="text-muted-foreground">Sending</p>
-                  <div className="flex flex-row gap-4">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        field.handleChange(
-                          formatEther(
-                            (nativeBalance?.value || BigInt(0)) / BigInt(4)
-                          )
-                        )
-                      }
-                      className="hover:cursor-pointer underline underline-offset-4"
-                    >
-                      25%
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        field.handleChange(
-                          formatEther(
-                            (nativeBalance?.value || BigInt(0)) / BigInt(2)
-                          )
-                        )
-                      }
-                      className="hover:cursor-pointer underline underline-offset-4"
-                    >
-                      50%
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        field.handleChange(
-                          formatEther(
-                            ((nativeBalance?.value || BigInt(0)) * BigInt(3)) /
-                              BigInt(4)
-                          )
-                        )
-                      }
-                      className="hover:cursor-pointer underline underline-offset-4"
-                    >
-                      75%
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        field.handleChange(
-                          formatEther(
-                            nativeBalance?.value || BigInt(0)
-                          ) as string
-                        )
-                      }
-                      className="hover:cursor-pointer underline underline-offset-4"
-                    >
-                      Max
-                    </button>
+                  <p className="text-muted-foreground">NFT Contract</p>
+                </div>
+                <div className="flex flex-row gap-2">
+                  <Input
+                    id={field.name}
+                    name={field.name}
+                    value={field.state.value || ""}
+                    onChange={(e) => field.handleChange(e.target.value)}
+                    className="rounded-none"
+                    type="text"
+                    placeholder="Address (0x...) or ENS (.eth)"
+                    required
+                  />
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="rounded-none hover:cursor-pointer"
+                    type="button"
+                    onClick={() => refetchTokenEnsAddress()}
+                  >
+                    {isLoadingTokenEnsAddress ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Search />
+                    )}
+                  </Button>
+                </div>
+                <TokenAddressFieldInfo
+                  field={field}
+                  ensAddress={tokenEnsAddress}
+                  isLoadingEnsAddress={isLoadingTokenEnsAddress}
+                  isErrorEnsAddress={isErrorTokenEnsAddress}
+                />
+                {isBalanceQueryEnabled && isLoadingTokenData ? (
+                  <Skeleton className="w-12 h-6" />
+                ) : (
+                  <div className="text-muted-foreground">
+                    {tokenData?.[0]?.result ? tokenData[0].result : "-"}{" "}-{" "}
+                    {tokenData?.[1]?.result ? tokenData[1].result : "-"}
                   </div>
+                )}
+              </div>
+            )}
+          </form.Field>
+        </div>
+
+        {/* token ID */}
+        <div>
+          <form.Field
+            name="tokenId"
+            validators={{
+              onChange: ({ value }) => {
+                if (!value) {
+                  return "Please enter a token ID";
+                }
+                if (isNaN(Number(value)) || Number(value) < 0) {
+                  return "Please enter a valid token ID";
+                }
+                return undefined;
+              },
+            }}
+          >
+            {(field) => (
+              <div className="flex flex-col gap-2">
+                <div className="flex flex-row gap-2 items-center justify-between">
+                  <p className="text-muted-foreground">Token ID</p>
                 </div>
                 <div className="flex flex-row items-center justify-between my-2">
                   {isDesktop ? (
@@ -374,7 +363,7 @@ export default function SendNativeTokenForm() {
                       onChange={(e) => field.handleChange(e.target.value)}
                       className="bg-transparent text-2xl outline-none w-full [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                       type="number"
-                      inputMode="decimal"
+                      inputMode="numeric"
                       pattern="[0-9]*"
                       placeholder="0"
                       required
@@ -382,35 +371,40 @@ export default function SendNativeTokenForm() {
                   )}
                 </div>
                 <div className="flex flex-row items-center justify-between">
-                  <div className="flex flex-row gap-2">
-                    <div className="text-muted-foreground">
-                      {isBalanceQueryEnabled && isLoadingNativeBalance ? (
-                        <Skeleton className="w-10 h-4" />
+                  <div className="text-muted-foreground text-sm">
+                    {isTokenIdQueryEnabled && isLoadingTokenData ? (
+                      <Skeleton className="w-24 h-4" />
+                    ) : isTokenIdQueryEnabled && ownerOf ? (
+                      isOwner ? (
+                        <span className="text-green-500">Owned by you</span>
                       ) : (
-                        formatEther(nativeBalance?.value || BigInt(0))
-                      )}
-                    </div>
-                    <p className="text-muted-foreground">ETH</p>
+                        <span className="text-red-400">
+                          Owned by {truncateHash(ownerOf)}
+                        </span>
+                      )
+                    ) : null}
                   </div>
                   <Button
                     variant="ghost"
                     size="icon"
                     className="rounded-none hover:cursor-pointer"
                     type="button"
-                    onClick={() => refetchNativeBalance()}
+                    onClick={() => refetchTokenData()}
                   >
-                    {isBalanceQueryEnabled && isLoadingNativeBalance ? (
+                    {isBalanceQueryEnabled && isLoadingTokenData ? (
                       <Loader2 className="w-4 h-4 animate-spin" />
                     ) : (
                       <RefreshCcw />
                     )}
                   </Button>
                 </div>
-                <AmountFieldInfo field={field} />
+                <TokenIdFieldInfo field={field} />
               </div>
             )}
           </form.Field>
         </div>
+
+        {/* recipient address */}
         <div>
           <form.Field
             name="receivingAddress"
@@ -423,86 +417,49 @@ export default function SendNativeTokenForm() {
               },
             }}
           >
-            {(field) => {
-              function startScanner() {
-                if (!videoRef.current) return;
-                setIsScanning(true);
-                scannerRef.current = new QrScanner(
-                  videoRef.current,
-                  (result) => {
-                    const parsed = parseQrAddress(result.data);
-                    if (parsed) {
-                      field.handleChange(parsed);
-                      stopScanner();
-                    }
-                  },
-                  {
-                    returnDetailedScanResult: true,
-                    highlightScanRegion: true,
-                    highlightCodeOutline: true,
-                  }
-                );
-                scannerRef.current.start().catch(() => stopScanner());
-              }
-
-              return (
-                <div className="flex flex-col gap-2">
-                  <div className="flex flex-row gap-2 items-center justify-between">
-                    <p className="text-muted-foreground">Recipient</p>
-                  </div>
-                  <InputGroup className="border-primary">
-                    <InputGroupInput
-                      id={field.name}
-                      name={field.name}
-                      value={field.state.value || ""}
-                      onChange={(e) => field.handleChange(e.target.value)}
-                      type="text"
-                      placeholder="Address (0x...) or ENS (.eth)"
-                      className="text-base"
-                      required
-                    />
-                    <InputGroupAddon align="inline-end">
-                      <InputGroupButton
-                        type="button"
-                        onClick={() => refetchEnsAddress()}
-                        title="Look up ENS"
-                      >
-                        {isLoadingEnsAddress ? (
-                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        ) : (
-                          <Search className="w-3.5 h-3.5" />
-                        )}
-                      </InputGroupButton>
-                      <InputGroupButton
-                        type="button"
-                        onClick={() => isScanning ? stopScanner() : startScanner()}
-                        title={isScanning ? "Stop scanner" : "Scan QR code"}
-                      >
-                        {isScanning ? (
-                          <X className="w-3.5 h-3.5" />
-                        ) : (
-                          <QrCode className="w-3.5 h-3.5" />
-                        )}
-                      </InputGroupButton>
-                    </InputGroupAddon>
-                  </InputGroup>
-                  <video
-                    ref={videoRef}
-                    className={isScanning ? "w-full aspect-square object-cover" : "hidden"}
-                  />
-                  <ReceivingAddressFieldInfo
-                    field={field}
-                    ensAddress={ensAddress}
-                    isLoadingEnsAddress={isLoadingEnsAddress}
-                    isErrorEnsAddress={isErrorEnsAddress}
-                  />
+            {(field) => (
+              <div className="flex flex-col gap-2">
+                <div className="flex flex-row gap-2 items-center justify-between">
+                  <p className="text-muted-foreground">Recipient</p>
                 </div>
-              );
-            }}
+                <div className="flex flex-row gap-2">
+                  <Input
+                    id={field.name}
+                    name={field.name}
+                    value={field.state.value || ""}
+                    onChange={(e) => field.handleChange(e.target.value)}
+                    className="rounded-none"
+                    type="text"
+                    placeholder="Address (0x...) or ENS (.eth)"
+                    required
+                  />
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="rounded-none hover:cursor-pointer"
+                    type="button"
+                    onClick={() => refetchEnsAddress()}
+                  >
+                    {isLoadingEnsAddress ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Search />
+                    )}
+                  </Button>
+                </div>
+                <ReceivingAddressFieldInfo
+                  field={field}
+                  ensAddress={ensAddress}
+                  isLoadingEnsAddress={isLoadingEnsAddress}
+                  isErrorEnsAddress={isErrorEnsAddress}
+                />
+              </div>
+            )}
           </form.Field>
         </div>
+
+        {/* gas preset */}
         <div>
-          {/* A type-safe field component*/}
           <form.Field name="gasPreset">
             {(field) => (
               <div className="flex flex-col gap-2">
@@ -580,6 +537,8 @@ export default function SendNativeTokenForm() {
             )}
           </form.Field>
         </div>
+
+        {/* password */}
         <div className="border-t-2 border-primary pt-4 border-dotted">
           <form.Field
             name="password"
@@ -595,7 +554,7 @@ export default function SendNativeTokenForm() {
                   name={field.name}
                   value={field.state.value || ""}
                   onChange={(e) => field.handleChange(e.target.value)}
-                  className="rounded-none border-primary text-base"
+                  className="rounded-none border-primary"
                   type="password"
                   placeholder="Password"
                   required
@@ -605,18 +564,20 @@ export default function SendNativeTokenForm() {
             )}
           </form.Field>
         </div>
+
+        {/* submit + status */}
         <div className="flex flex-col gap-2">
           <form.Subscribe
             selector={(state) => [
               state.canSubmit,
-              isPendingSendNativeTransaction,
-              isConfirmingSendNativeTransaction,
+              isPendingSendErc721Transaction,
+              isConfirmingSendErc721Transaction,
             ]}
           >
             {([
               canSubmit,
-              isPendingSendNativeTransaction,
-              isConfirmingSendNativeTransaction,
+              isPendingSendErc721Transaction,
+              isConfirmingSendErc721Transaction,
             ]) => (
               <div className="grid grid-cols-3 gap-2">
                 <Button
@@ -625,8 +586,8 @@ export default function SendNativeTokenForm() {
                   type="reset"
                   disabled={
                     !canSubmit ||
-                    isPendingSendNativeTransaction ||
-                    isConfirmingSendNativeTransaction
+                    isPendingSendErc721Transaction ||
+                    isConfirmingSendErc721Transaction
                   }
                   onClick={handleReset}
                 >
@@ -637,22 +598,16 @@ export default function SendNativeTokenForm() {
                   type="submit"
                   disabled={
                     !canSubmit ||
-                    isPendingSendNativeTransaction ||
-                    isConfirmingSendNativeTransaction
+                    isPendingSendErc721Transaction ||
+                    isConfirmingSendErc721Transaction
                   }
                 >
-                  {isPendingSendNativeTransaction ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    </>
-                  ) : isConfirmingSendNativeTransaction ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    </>
-                  ) : isConfirmedSendNativeTransaction ? (
-                    <>
-                      <Check className="w-4 h-4" />
-                    </>
+                  {isPendingSendErc721Transaction ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : isConfirmingSendErc721Transaction ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : isConfirmedSendErc721Transaction ? (
+                    <Check className="w-4 h-4" />
                   ) : (
                     <>Send</>
                   )}
@@ -663,17 +618,17 @@ export default function SendNativeTokenForm() {
           <div className="border-t-2 border-primary pt-4 mt-4">
             <div className="flex flex-col gap-1">
               <div className="flex flex-row gap-2 items-center">
-                {isPendingSendNativeTransaction ? (
+                {isPendingSendErc721Transaction ? (
                   <div className="flex flex-row gap-2 items-center">
                     <Loader2 className="w-4 h-4 animate-spin" />
                     <p>Signing transaction...</p>
                   </div>
-                ) : isConfirmingSendNativeTransaction ? (
+                ) : isConfirmingSendErc721Transaction ? (
                   <div className="flex flex-row gap-2 items-center">
                     <Loader2 className="w-4 h-4 animate-spin" />
                     <p>Confirming transaction...</p>
                   </div>
-                ) : isConfirmedSendNativeTransaction ? (
+                ) : isConfirmedSendErc721Transaction ? (
                   <div className="flex flex-row gap-2 items-center">
                     <Check className="w-4 h-4" />
                     <p>Transaction confirmed</p>
@@ -685,17 +640,17 @@ export default function SendNativeTokenForm() {
                   </div>
                 )}
               </div>
-              {sendNativeTransactionHash ? (
+              {sendErc721TransactionHash ? (
                 <div className="flex flex-row gap-2 items-center">
                   <p className="text-muted-foreground">&gt;</p>
                   <a
                     target="_blank"
                     rel="noopener noreferrer"
                     className="underline underline-offset-4 hover:cursor-pointer"
-                    href={`${selectedChainBlockExplorer}/tx/${sendNativeTransactionHash}`}
+                    href={`${selectedChainBlockExplorer}/tx/${sendErc721TransactionHash}`}
                   >
                     <div className="flex flex-row gap-2 items-center">
-                      {truncateHash(sendNativeTransactionHash)}
+                      {truncateHash(sendErc721TransactionHash)}
                       <ExternalLink className="w-4 h-4" />
                     </div>
                   </a>
@@ -714,16 +669,57 @@ export default function SendNativeTokenForm() {
   );
 }
 
-function AmountFieldInfo({ field }: { field: AnyFieldApi }) {
+function TokenAddressFieldInfo({
+  field,
+  ensAddress,
+  isLoadingEnsAddress,
+  isErrorEnsAddress,
+}: {
+  field: AnyFieldApi;
+  ensAddress?: Address | null;
+  isLoadingEnsAddress?: boolean;
+  isErrorEnsAddress?: boolean;
+}) {
   return (
     <>
       {!field.state.meta.isTouched ? (
-        <em>Please enter an amount to send</em>
+        <em>Please enter a token address or ENS</em>
       ) : field.state.meta.isTouched && !field.state.meta.isValid ? (
         <em
           className={`${
             field.state.meta.errors.join(",") ===
-            "Please enter an amount to send"
+            "Please enter a token address or ENS"
+              ? ""
+              : "text-red-400"
+          }`}
+        >
+          {field.state.meta.errors.join(",")}
+        </em>
+      ) : isLoadingEnsAddress ? (
+        <Skeleton className="w-10 h-4" />
+      ) : isErrorEnsAddress ? (
+        <div className="text-red-400 text-xs">Failed to resolve ENS</div>
+      ) : ensAddress ? (
+        <em className="text-green-500 text-xs">{ensAddress}</em>
+      ) : ensAddress === null ? (
+        <div className="text-red-400 text-xs">Invalid ENS</div>
+      ) : (
+        <em className="text-green-500">ok!</em>
+      )}
+      {field.state.meta.isValidating ? "Validating..." : null}
+    </>
+  );
+}
+
+function TokenIdFieldInfo({ field }: { field: AnyFieldApi }) {
+  return (
+    <>
+      {!field.state.meta.isTouched ? (
+        <em>Please enter the NFT token ID</em>
+      ) : field.state.meta.isTouched && !field.state.meta.isValid ? (
+        <em
+          className={`${
+            field.state.meta.errors.join(",") === "Please enter a token ID"
               ? ""
               : "text-red-400"
           }`}

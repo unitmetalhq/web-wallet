@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useAtomValue } from "jotai";
 import type { UmKeystore } from "@/types/wallet";
 import { activeWalletAtom } from "@/atoms/activeWalletAtom";
+import { offlineModeAtom } from "@/atoms/settingsAtom";
 import { useBalance, useConfig, useReadContracts } from "wagmi";
 import { useQuery } from "@tanstack/react-query";
 import { formatUnits, erc20Abi } from "viem";
@@ -25,8 +26,9 @@ export default function Balances() {
   const config = useConfig();
   const activeWallet = useAtomValue<UmKeystore | null>(activeWalletAtom);
 
+  const offlineMode = useAtomValue(offlineModeAtom);
   const address = activeWallet?.address as Address | undefined;
-  const isQueryEnabled = !!address;
+  const isQueryEnabled = !!address && !offlineMode;
 
   const nativeCurrency = config.chains.find((c) => c.id === CHAIN_ID)?.nativeCurrency;
 

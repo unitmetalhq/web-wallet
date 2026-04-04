@@ -3,6 +3,7 @@ import ManageWallet from "@/components/manage-wallet";
 import BackupWallet from "@/components/backup-wallet";
 import SendTokens from "@/components/send-tokens";
 import Balances from "@/components/balances";
+import WalletSettings from "@/components/wallet-settings";
 
 type Tab = "wallets" | "send" | "balances" | "settings";
 
@@ -27,16 +28,7 @@ export default function MobileNavbar() {
         )}
         {activeTab === "send" && <SendTokens />}
         {activeTab === "balances" && <Balances />}
-        {activeTab === "settings" && (
-          <div className="flex flex-col border-2 border-primary gap-2 pb-8">
-            <div className="flex flex-row justify-between items-center bg-primary text-secondary p-1">
-              <h1 className="text-lg font-bold">Settings</h1>
-            </div>
-            <div className="flex flex-col gap-4 px-4 py-2">
-              <p className="text-muted-foreground text-sm">No settings available yet.</p>
-            </div>
-          </div>
-        )}
+        {activeTab === "settings" && <WalletSettings />}
       </div>
 
       <div className="fixed bottom-0 left-0 right-0 border-t-2 border-primary bg-background grid grid-cols-4">
