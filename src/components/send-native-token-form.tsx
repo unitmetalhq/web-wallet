@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/input-group";
 import { useForm, useStore } from "@tanstack/react-form";
 import type { AnyFieldApi } from "@tanstack/react-form";
-import { Loader2, Check, ExternalLink, Search, QrCode, X } from "lucide-react";
+import { Loader2, Check, ExternalLink, Search, QrCode, X, BookUser } from "lucide-react";
 import QrScanner from "qr-scanner";
 import { parseEther, formatEther, type Address } from "viem";
 
@@ -32,7 +32,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { RefreshCcw } from "lucide-react";
 import { Keystore, Bytes } from "ox";
 import { mnemonicToAccount } from "viem/accounts";
-import { truncateHash } from "@/lib/utils";
+import { truncateHash, truncateAddress } from "@/lib/utils";
+import { contactsAtom } from "@/atoms/contactsAtom";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 /**
  * Parses an address out of QR code data, handling:
@@ -70,6 +72,11 @@ export default function SendNativeTokenForm() {
 
   // check if desktop
   const isDesktop = useMediaQuery("(min-width: 768px)");
+
+  // contacts
+  const contacts = useAtomValue(contactsAtom);
+  const [contactPickerOpen, setContactPickerOpen] = useState(false);
+  const [contactSearch, setContactSearch] = useState("");
 
   // QR scanner
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -272,8 +279,8 @@ export default function SendNativeTokenForm() {
                 }
 
                 // Check if negative
-                if (numValue <= 0) {
-                  return "Amount must be greater than 0";
+                if (numValue < 0) {
+                  return "Amount must be greater than or equal to 0";
                 }
 
                 // Try to parse ether and check balance
@@ -466,6 +473,7 @@ export default function SendNativeTokenForm() {
                         type="button"
                         onClick={() => refetchEnsAddress()}
                         title="Look up ENS"
+                        className="hover:cursor-pointer"
                       >
                         {isLoadingEnsAddress ? (
                           <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -477,6 +485,7 @@ export default function SendNativeTokenForm() {
                         type="button"
                         onClick={() => isScanning ? stopScanner() : startScanner()}
                         title={isScanning ? "Stop scanner" : "Scan QR code"}
+                        className="hover:cursor-pointer"
                       >
                         {isScanning ? (
                           <X className="w-3.5 h-3.5" />
@@ -484,8 +493,67 @@ export default function SendNativeTokenForm() {
                           <QrCode className="w-3.5 h-3.5" />
                         )}
                       </InputGroupButton>
+                      <InputGroupButton
+                        type="button"
+                        onClick={() => setContactPickerOpen(true)}
+                        title="Pick from address book"
+                        className="hover:cursor-pointer"
+                      >
+                        <BookUser className="w-3.5 h-3.5" />
+                      </InputGroupButton>
                     </InputGroupAddon>
                   </InputGroup>
+                  <Dialog open={contactPickerOpen} onOpenChange={setContactPickerOpen}>
+                    <DialogContent className="max-w-sm">
+                      <DialogHeader>
+                        <DialogTitle>Address Book</DialogTitle>
+                      </DialogHeader>
+                      <div className="flex flex-row gap-2 items-center">
+                        <Search className="w-4 h-4 text-muted-foreground shrink-0" />
+                        <input
+                          className="flex-1 bg-transparent outline-none text-sm placeholder:text-muted-foreground"
+                          placeholder="Search name or address..."
+                          value={contactSearch}
+                          onChange={(e) => setContactSearch(e.target.value)}
+                          autoFocus
+                        />
+                      </div>
+                      <div className="border-t border-border" />
+                      <div className="flex flex-col gap-1 max-h-64 overflow-y-auto">
+                        {contacts
+                          .filter((c) => {
+                            const q = contactSearch.toLowerCase();
+                            return (
+                              c.name.toLowerCase().includes(q) ||
+                              c.address.toLowerCase().includes(q)
+                            );
+                          })
+                          .map((c) => (
+                            <button
+                              key={c.id}
+                              type="button"
+                              className="flex flex-row justify-between items-center px-2 py-1.5 hover:bg-muted hover:cursor-pointer text-left"
+                              onClick={() => {
+                                field.handleChange(c.address);
+                                setContactPickerOpen(false);
+                                setContactSearch("");
+                              }}
+                            >
+                              <span className="font-medium text-xs">{c.name}</span>
+                              <span className="text-xs text-muted-foreground font-mono">{truncateAddress(c.address)}</span>
+                            </button>
+                          ))}
+                        {contacts.filter((c) => {
+                          const q = contactSearch.toLowerCase();
+                          return c.name.toLowerCase().includes(q) || c.address.toLowerCase().includes(q);
+                        }).length === 0 && (
+                          <p className="text-xs text-muted-foreground text-center py-4">
+                            {contacts.length === 0 ? "No contacts saved yet." : "No contacts match."}
+                          </p>
+                        )}
+                      </div>
+                    </DialogContent>
+                  </Dialog>
                   <video
                     ref={videoRef}
                     className={isScanning ? "w-full aspect-square object-cover" : "hidden"}
