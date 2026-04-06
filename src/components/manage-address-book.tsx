@@ -5,9 +5,9 @@ import type { Contact } from "@/types/contact";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
+import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@/components/ui/card";
+import { chainIdToName } from "@/lib/utils";
 import { Trash2, BookUser, Search } from "lucide-react";
-import { truncateAddress } from "@/lib/utils";
 import CopyButton from "@/components/copy-button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import AddContactForm from "@/components/add-contact-form";
@@ -115,28 +115,25 @@ function ContactCard({
     <Card size="sm">
       <CardHeader>
         <CardTitle>{contact.name}</CardTitle>
-        <CardDescription>
-          <span className="font-mono">{truncateAddress(contact.address)}</span>
-          {contact.chain !== null && (
-            <span className="ml-2">· chain {contact.chain}</span>
-          )}
-        </CardDescription>
       </CardHeader>
       {(contact.metadata.note || contact.metadata.tags.length > 0 || contact.metadata.version) && (
         <CardContent>
           <div className="flex flex-col gap-2">
+            <div className="font-mono text-xs">{contact.address}</div>
+            <div className="flex flex-row gap-2">
+              {contact.chain !== null && (
+                <div className="text-xs text-muted-foreground">{chainIdToName(contact.chain)}</div>
+              )}
+            </div>
             {contact.metadata.note && (
               <p className="text-muted-foreground text-xs">{contact.metadata.note}</p>
             )}
             <div className="flex flex-row flex-wrap items-center gap-2">
               {contact.metadata.tags.map((tag) => (
-                <Badge key={tag} variant="outline">
+                <Badge key={tag} variant="secondary">
                   {tag}
                 </Badge>
               ))}
-              {contact.metadata.version && (
-                <Badge variant="secondary">{contact.metadata.version}</Badge>
-              )}
             </div>
           </div>
         </CardContent>

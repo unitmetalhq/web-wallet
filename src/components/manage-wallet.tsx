@@ -6,18 +6,19 @@ import {
   SelectContent,
   SelectGroup,
   SelectItem,
+  SelectSeparator,
   SelectTrigger,
-  SelectValue,
 } from "@/components/ui/select";
 import { truncateAddress } from "@/lib/utils";
 import { walletsAtom } from "@/atoms/walletsAtom";
 import { activeWalletAtom } from "@/atoms/activeWalletAtom";
-import CopyButton from "@/components/copy-button";
+import InlineCopyButton from "@/components/inline-copy-button";
 import { Cuer } from "cuer";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import ExportWallet from "@/components/export-wallet";
 import DeleteWallet from "@/components/delete-wallet";
 import ImportWallet from "@/components/import-wallet";
+import MigrationWalletStorage from "@/components/migration-wallet-storage";
 
 
 export default function ManageWallet() {
@@ -32,7 +33,7 @@ export default function ManageWallet() {
   }));
 
   function handleSelectWallet(value: string | null) {
-    if (value == null) {
+    if (!value) {
       setActiveWallet(null);
       return;
     }
@@ -49,12 +50,20 @@ export default function ManageWallet() {
       {wallets && wallets.length > 0 ? (
         <div className="flex flex-col gap-4 px-4 py-2">
           <div className="flex flex-col gap-2">
-            <Select items={walletItems} onValueChange={handleSelectWallet}>
+            <Select value={activeWallet?.id ?? null} onValueChange={handleSelectWallet}>
               <SelectTrigger className="w-full border-primary border rounded-none">
-                <SelectValue placeholder="Select a wallet" />
+                {activeWallet ? (
+                  <p>{activeWallet.name}</p>
+                ) : (
+                  <p className="text-muted-foreground">No wallet selected</p>
+                )}
               </SelectTrigger>
               <SelectContent>
                 <SelectGroup>
+                  <SelectItem value={null}>
+                    <p className="text-muted-foreground">No wallet selected</p>
+                  </SelectItem>
+                  <SelectSeparator />
                   {walletItems.map((wallet) => (
                     <SelectItem key={wallet.value} value={wallet.value}>
                       <div className="flex flex-row gap-2">
@@ -69,13 +78,14 @@ export default function ManageWallet() {
               </SelectContent>
             </Select>
           </div>
-          <div className="flex flex-row gap-2">
-            <CopyButton disabledCondition={!activeWallet} text={activeWallet?.address || ""} />
+          <div className="flex flex-row gap-1 items-center">
+            <p className="text-xs text-muted-foreground font-mono break-all">{activeWallet?.address}</p>
+            <InlineCopyButton text={activeWallet?.address} />
           </div>
           <div className="w-[100px] h-[100px]">
             {activeWallet?.address ? (
               <Cuer
-                arena="/unitmetal-symbol.svg"
+                arena="/icon.svg"
                 value={activeWallet?.address || ""}
               />
             ) : (
@@ -84,6 +94,7 @@ export default function ManageWallet() {
               </div>
             )}
           </div>
+          <MigrationWalletStorage />
           <div className="flex flex-col gap-2 mt-6 border-t-2 border-primary pt-4">
             <Tabs defaultValue="create" className="w-full">
               <TabsList className="border-primary border rounded-none">

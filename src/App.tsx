@@ -7,6 +7,7 @@ import BackupWallet from "@/components/backup-wallet";
 import MobileNavbar from "@/components/mobile-navbar";
 import WalletSettings from "@/components/wallet-settings";
 import ManageAddressBook from "@/components/manage-address-book";
+import Activity from "@/components/activity";
 
 export default function App() {
   const desktopTab = useAtomValue(desktopTabAtom);
@@ -29,6 +30,11 @@ export default function App() {
         {desktopTab === "address-book" && (
           <div className="w-[760px] mx-auto">
             <ManageAddressBook />
+          </div>
+        )}
+        {desktopTab === "activity" && (
+          <div className="w-[760px] mx-auto">
+            <Activity />
           </div>
         )}
         {desktopTab === "backup" && (

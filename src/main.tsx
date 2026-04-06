@@ -10,7 +10,7 @@ import SiteHeader from "@/components/site-header"
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <Providers>
-      <main className="flex flex-col gap-4 items-center p-6 md:p-10 pb-12">
+      <main className="flex flex-col gap-4 items-center p-2 lg:p-6 md:p-10 pb-12">
         <SiteHeader />
         <App />
         {/* <Footer /> */}

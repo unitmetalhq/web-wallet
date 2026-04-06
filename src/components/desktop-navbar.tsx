@@ -4,6 +4,7 @@ import { desktopTabAtom, type DesktopTab } from "@/atoms/desktopTabAtom";
 const TABS: { id: DesktopTab; label: string }[] = [
   { id: "home", label: "Home" },
   { id: "address-book", label: "Address Book" },
+  { id: "activity", label: "Activity" },
   { id: "backup", label: "Backup" },
   { id: "settings", label: "Settings" },
 ];

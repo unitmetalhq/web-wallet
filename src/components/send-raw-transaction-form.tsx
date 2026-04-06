@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useForm } from "@tanstack/react-form";
 import type { AnyFieldApi } from "@tanstack/react-form";
-import { Loader2, Check, ExternalLink } from "lucide-react";
+import { Loader2, Check } from "lucide-react";
 import { type Address, type Hex, hexToBigInt } from "viem";
 import {
   useConfig,
@@ -15,9 +15,9 @@ import {
   useSendTransaction,
 } from "wagmi";
 import { activeWalletAtom } from "@/atoms/activeWalletAtom";
-import { Keystore, Bytes } from "ox";
-import { mnemonicToAccount } from "viem/accounts";
-import { truncateAddress, truncateHash } from "@/lib/utils";
+import { decryptWalletToAccount } from "@/lib/um-wallet";
+import { truncateAddress } from "@/lib/utils";
+import { TransactionStatus } from "@/components/transaction-status";
 
 function validateTransaction(value: string): WagmiPreparedTransaction | string {
   if (!value) {
@@ -65,11 +65,7 @@ export default function SendRawTransactionForm() {
         return;
       }
 
-      const key = Keystore.toKey(activeWallet, { password: value.password });
-      const mnemonicHex = Keystore.decrypt(activeWallet, key);
-      const mnemonicBytes = Bytes.fromHex(mnemonicHex);
-      const mnemonicPhrase = Bytes.toString(mnemonicBytes);
-      const account = mnemonicToAccount(mnemonicPhrase);
+      const account = decryptWalletToAccount(activeWallet, value.password);
 
       sendTransaction({
         account,
@@ -302,52 +298,13 @@ export default function SendRawTransactionForm() {
             )}
           </form.Subscribe>
           <div className="border-t-2 border-primary pt-4 mt-4">
-            <div className="flex flex-col gap-1">
-              <div className="flex flex-row gap-2 items-center">
-                {isPendingRawTransaction ? (
-                  <div className="flex flex-row gap-2 items-center">
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <p>Signing transaction...</p>
-                  </div>
-                ) : isConfirmingRawTransaction ? (
-                  <div className="flex flex-row gap-2 items-center">
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <p>Confirming transaction...</p>
-                  </div>
-                ) : isConfirmedRawTransaction ? (
-                  <div className="flex flex-row gap-2 items-center">
-                    <Check className="w-4 h-4" />
-                    <p>Transaction confirmed</p>
-                  </div>
-                ) : (
-                  <div className="flex flex-row gap-2 items-center">
-                    <p className="text-muted-foreground">&gt;</p>
-                    <p>No pending transaction</p>
-                  </div>
-                )}
-              </div>
-              {rawTransactionHash ? (
-                <div className="flex flex-row gap-2 items-center">
-                  <p className="text-muted-foreground">&gt;</p>
-                  <a
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="underline underline-offset-4 hover:cursor-pointer"
-                    href={`${transactionChainBlockExplorer}/tx/${rawTransactionHash}`}
-                  >
-                    <div className="flex flex-row gap-2 items-center">
-                      {truncateHash(rawTransactionHash)}
-                      <ExternalLink className="w-4 h-4" />
-                    </div>
-                  </a>
-                </div>
-              ) : (
-                <div className="flex flex-row gap-2 items-center">
-                  <p className="text-muted-foreground">&gt;</p>
-                  <p>No transaction hash</p>
-                </div>
-              )}
-            </div>
+            <TransactionStatus
+              isPending={isPendingRawTransaction}
+              isConfirming={isConfirmingRawTransaction}
+              isConfirmed={isConfirmedRawTransaction}
+              txHash={rawTransactionHash}
+              blockExplorerUrl={transactionChainBlockExplorer}
+            />
           </div>
         </div>
       </div>

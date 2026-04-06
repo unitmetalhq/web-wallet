@@ -1,6 +1,4 @@
-"use client";
-
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAtomValue } from "jotai";
 import type { UmKeystore } from "@/types/wallet";
 import { Button } from "@/components/ui/button";
@@ -13,8 +11,7 @@ import {
 } from "@/components/ui/input-group";
 import { useForm, useStore } from "@tanstack/react-form";
 import type { AnyFieldApi } from "@tanstack/react-form";
-import { Loader2, Check, ExternalLink, Search, QrCode, X, BookUser } from "lucide-react";
-import QrScanner from "qr-scanner";
+import { Loader2, Check, Search } from "lucide-react";
 import { parseEther, formatEther, type Address } from "viem";
 
 import {
@@ -30,41 +27,13 @@ import { useMediaQuery } from "@/hooks/use-media-query";
 import { activeWalletAtom } from "@/atoms/activeWalletAtom";
 import { Skeleton } from "@/components/ui/skeleton";
 import { RefreshCcw } from "lucide-react";
-import { Keystore, Bytes } from "ox";
-import { mnemonicToAccount } from "viem/accounts";
-import { truncateHash, truncateAddress } from "@/lib/utils";
-import { contactsAtom } from "@/atoms/contactsAtom";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { decryptWalletToAccount } from "@/lib/um-wallet";
+import { recordActivity } from "@/lib/activity";
+import type { ActivityRecord } from "@/types/activity";
+import { TransactionStatus } from "@/components/transaction-status";
+import AddressBookPickerButton from "@/components/address-book-picker-button";
+import QrScannerButton from "@/components/qr-scanner-button";
 
-/**
- * Parses an address out of QR code data, handling:
- *   - Plain address:        0xABC...  (non-checksum or checksum)
- *   - ERC-3770 short name:  eth:0xABC...
- *   - CAIP-10 / EIP-155:   eip155:1:0xABC...
- *   - EIP-681 URI:          ethereum:0xABC...@1/transfer?...
- *
- * Returns the raw address string (preserving checksum if present) or null.
- */
-function parseQrAddress(raw: string): string | null {
-  let candidate = raw.trim();
-
-  // Strip any scheme prefix before the address: "eth:", "eip155:1:", "ethereum:", etc.
-  // Strategy: if there's a colon, take the last colon-delimited segment.
-  if (candidate.includes(":")) {
-    const parts = candidate.split(":");
-    candidate = parts[parts.length - 1];
-  }
-
-  // Strip EIP-681 suffixes: @chainId, /functionName, ?params
-  candidate = candidate.split("@")[0].split("/")[0].split("?")[0];
-
-  // Validate: 0x followed by exactly 40 hex characters
-  if (/^0x[0-9a-fA-F]{40}$/.test(candidate)) {
-    return candidate;
-  }
-
-  return null;
-}
 
 export default function SendNativeTokenForm() {
   // get Wagmi config
@@ -73,28 +42,13 @@ export default function SendNativeTokenForm() {
   // check if desktop
   const isDesktop = useMediaQuery("(min-width: 768px)");
 
-  // contacts
-  const contacts = useAtomValue(contactsAtom);
-  const [contactPickerOpen, setContactPickerOpen] = useState(false);
-  const [contactSearch, setContactSearch] = useState("");
-
-  // QR scanner
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const scannerRef = useRef<QrScanner | null>(null);
-  const [isScanning, setIsScanning] = useState(false);
-
-  const stopScanner = useCallback(() => {
-    scannerRef.current?.stop();
-    scannerRef.current?.destroy();
-    scannerRef.current = null;
-    setIsScanning(false);
-  }, []);
-
-  // Destroy scanner on unmount
-  useEffect(() => () => stopScanner(), [stopScanner]);
-
   // current active wallet
   const activeWallet = useAtomValue<UmKeystore | null>(activeWalletAtom);
+
+  // capture submit-time data to record on confirmation
+  const pendingActivityRef = useRef<Omit<ActivityRecord, "id" | "timestamp" | "txHash"> | null>(null);
+
+  const [formError, setFormError] = useState<string | null>(null);
 
   // get gas price
   const {
@@ -125,37 +79,17 @@ export default function SendNativeTokenForm() {
       if (value.type === "native") {
         // check if there is an active wallet
         if (!activeWallet) {
-          console.error("No active wallet");
+          setFormError("No active wallet selected.");
           return;
         }
 
-        // duplicate the active wallet
-        const currentActiveWallet = activeWallet;
-
-        // Derive the key using your password.
-        const key = Keystore.toKey(currentActiveWallet, {
-          password: value.password,
-        });
-
-        // Decrypt the mnemonic.
-        const mnemonicHex = Keystore.decrypt(currentActiveWallet, key);
-
-        // Convert the mnemonicHex to mnemonicBytes.
-        const mnemonicBytes = Bytes.fromHex(mnemonicHex);
-
-        // Convert the mnemonicBytes to a mnemonic phrase
-        const mnemonicPhrase = Bytes.toString(mnemonicBytes);
-
-        // Convert the mnemonic phrase to an account
-        const account = mnemonicToAccount(mnemonicPhrase);
+        const account = decryptWalletToAccount(activeWallet, value.password);
 
         // resolve ENS to address if needed
         let recipientAddress: Address;
         if (value.receivingAddress.endsWith(".eth")) {
-          // Get the resolved ENS address from the form state
-          // We need to resolve it here if not already resolved
           if (!ensAddress) {
-            console.error("ENS address not resolved");
+            setFormError("ENS address not resolved. Click the search icon to resolve it first.");
             return;
           }
           recipientAddress = ensAddress as Address;
@@ -163,8 +97,19 @@ export default function SendNativeTokenForm() {
           recipientAddress = value.receivingAddress as Address;
         }
 
+        // capture activity data before sending
+        pendingActivityRef.current = {
+          type: "native",
+          from: activeWallet.address,
+          to: recipientAddress,
+          chainId: 1,
+          nativeValue: parseEther(value.amount).toString(),
+          gasPrice: value.gasPreset ? parseEther(value.gasPreset, "gwei").toString() : undefined,
+          ensName: value.receivingAddress.endsWith(".eth") ? value.receivingAddress : undefined,
+        };
+
         // execute the send native transaction
-        sendNativeTransaction({
+        sendNativeTx.mutate({
           account: account,
           to: recipientAddress,
           value: parseEther(value.amount),
@@ -216,41 +161,42 @@ export default function SendNativeTokenForm() {
   });
 
   // hook to send native transaction
-  const {
-    data: sendNativeTransactionHash,
-    isPending: isPendingSendNativeTransaction,
-    sendTransaction: sendNativeTransaction,
-    reset: resetSendNativeTransaction,
-  } = useSendTransaction();
+  const sendNativeTx = useSendTransaction();
 
   // hook to wait for transaction receipt
   const {
     isLoading: isConfirmingSendNativeTransaction,
     isSuccess: isConfirmedSendNativeTransaction,
+    error: receiptError,
   } = useWaitForTransactionReceipt({
-    hash: sendNativeTransactionHash,
+    hash: sendNativeTx.data,
     chainId: 1,
   });
+
+  const sendError = sendNativeTx.error?.message ?? null;
 
   const selectedChainBlockExplorer = config.chains.find(
     (chain) => chain.id === 1
   )?.blockExplorers?.default.url;
 
   function handleReset() {
-    resetSendNativeTransaction();
+    sendNativeTx.reset();
+    setFormError(null);
     form.reset();
   }
 
+  function handleClearError() {
+    sendNativeTx.reset();
+    setFormError(null);
+  }
+
   useEffect(() => {
-    // reset the transaction state
-    resetSendNativeTransaction();
+    if (isConfirmedSendNativeTransaction && sendNativeTx.data && pendingActivityRef.current) {
+      recordActivity({ ...pendingActivityRef.current, txHash: sendNativeTx.data });
+      pendingActivityRef.current = null;
+    }
+  }, [isConfirmedSendNativeTransaction, sendNativeTx.data]);
 
-    // reset the form values
-    form.reset();
-
-    // refetch the native balance
-    refetchNativeBalance();
-  }, [resetSendNativeTransaction, form, refetchNativeBalance]);
 
   return (
     <form
@@ -361,7 +307,7 @@ export default function SendNativeTokenForm() {
                     </button>
                   </div>
                 </div>
-                <div className="flex flex-row items-center justify-between my-2">
+                <div className="flex flex-row items-center justify-between">
                   {isDesktop ? (
                     <input
                       id={field.name}
@@ -431,27 +377,6 @@ export default function SendNativeTokenForm() {
             }}
           >
             {(field) => {
-              function startScanner() {
-                if (!videoRef.current) return;
-                setIsScanning(true);
-                scannerRef.current = new QrScanner(
-                  videoRef.current,
-                  (result) => {
-                    const parsed = parseQrAddress(result.data);
-                    if (parsed) {
-                      field.handleChange(parsed);
-                      stopScanner();
-                    }
-                  },
-                  {
-                    returnDetailedScanResult: true,
-                    highlightScanRegion: true,
-                    highlightCodeOutline: true,
-                  }
-                );
-                scannerRef.current.start().catch(() => stopScanner());
-              }
-
               return (
                 <div className="flex flex-col gap-2">
                   <div className="flex flex-row gap-2 items-center justify-between">
@@ -465,7 +390,7 @@ export default function SendNativeTokenForm() {
                       onChange={(e) => field.handleChange(e.target.value)}
                       type="text"
                       placeholder="Address (0x...) or ENS (.eth)"
-                      className="text-base"
+                      className="text-base rounded-none"
                       required
                     />
                     <InputGroupAddon align="inline-end">
@@ -481,83 +406,10 @@ export default function SendNativeTokenForm() {
                           <Search className="w-3.5 h-3.5" />
                         )}
                       </InputGroupButton>
-                      <InputGroupButton
-                        type="button"
-                        onClick={() => isScanning ? stopScanner() : startScanner()}
-                        title={isScanning ? "Stop scanner" : "Scan QR code"}
-                        className="hover:cursor-pointer"
-                      >
-                        {isScanning ? (
-                          <X className="w-3.5 h-3.5" />
-                        ) : (
-                          <QrCode className="w-3.5 h-3.5" />
-                        )}
-                      </InputGroupButton>
-                      <InputGroupButton
-                        type="button"
-                        onClick={() => setContactPickerOpen(true)}
-                        title="Pick from address book"
-                        className="hover:cursor-pointer"
-                      >
-                        <BookUser className="w-3.5 h-3.5" />
-                      </InputGroupButton>
+                      <QrScannerButton onScan={(address) => field.handleChange(address)} />
+                      <AddressBookPickerButton onSelect={(address) => field.handleChange(address)} />
                     </InputGroupAddon>
                   </InputGroup>
-                  <Dialog open={contactPickerOpen} onOpenChange={setContactPickerOpen}>
-                    <DialogContent className="max-w-sm">
-                      <DialogHeader>
-                        <DialogTitle>Address Book</DialogTitle>
-                      </DialogHeader>
-                      <div className="flex flex-row gap-2 items-center">
-                        <Search className="w-4 h-4 text-muted-foreground shrink-0" />
-                        <input
-                          className="flex-1 bg-transparent outline-none text-sm placeholder:text-muted-foreground"
-                          placeholder="Search name or address..."
-                          value={contactSearch}
-                          onChange={(e) => setContactSearch(e.target.value)}
-                          autoFocus
-                        />
-                      </div>
-                      <div className="border-t border-border" />
-                      <div className="flex flex-col gap-1 max-h-64 overflow-y-auto">
-                        {contacts
-                          .filter((c) => {
-                            const q = contactSearch.toLowerCase();
-                            return (
-                              c.name.toLowerCase().includes(q) ||
-                              c.address.toLowerCase().includes(q)
-                            );
-                          })
-                          .map((c) => (
-                            <button
-                              key={c.id}
-                              type="button"
-                              className="flex flex-row justify-between items-center px-2 py-1.5 hover:bg-muted hover:cursor-pointer text-left"
-                              onClick={() => {
-                                field.handleChange(c.address);
-                                setContactPickerOpen(false);
-                                setContactSearch("");
-                              }}
-                            >
-                              <span className="font-medium text-xs">{c.name}</span>
-                              <span className="text-xs text-muted-foreground font-mono">{truncateAddress(c.address)}</span>
-                            </button>
-                          ))}
-                        {contacts.filter((c) => {
-                          const q = contactSearch.toLowerCase();
-                          return c.name.toLowerCase().includes(q) || c.address.toLowerCase().includes(q);
-                        }).length === 0 && (
-                          <p className="text-xs text-muted-foreground text-center py-4">
-                            {contacts.length === 0 ? "No contacts saved yet." : "No contacts match."}
-                          </p>
-                        )}
-                      </div>
-                    </DialogContent>
-                  </Dialog>
-                  <video
-                    ref={videoRef}
-                    className={isScanning ? "w-full aspect-square object-cover" : "hidden"}
-                  />
                   <ReceivingAddressFieldInfo
                     field={field}
                     ensAddress={ensAddress}
@@ -674,18 +526,8 @@ export default function SendNativeTokenForm() {
           </form.Field>
         </div>
         <div className="flex flex-col gap-2">
-          <form.Subscribe
-            selector={(state) => [
-              state.canSubmit,
-              isPendingSendNativeTransaction,
-              isConfirmingSendNativeTransaction,
-            ]}
-          >
-            {([
-              canSubmit,
-              isPendingSendNativeTransaction,
-              isConfirmingSendNativeTransaction,
-            ]) => (
+          <form.Subscribe selector={(state) => state.canSubmit}>
+            {(canSubmit) => (
               <div className="grid grid-cols-3 gap-2">
                 <Button
                   className="hover:cursor-pointer rounded-none col-span-1"
@@ -693,7 +535,7 @@ export default function SendNativeTokenForm() {
                   type="reset"
                   disabled={
                     !canSubmit ||
-                    isPendingSendNativeTransaction ||
+                    sendNativeTx.isPending ||
                     isConfirmingSendNativeTransaction
                   }
                   onClick={handleReset}
@@ -705,22 +547,16 @@ export default function SendNativeTokenForm() {
                   type="submit"
                   disabled={
                     !canSubmit ||
-                    isPendingSendNativeTransaction ||
+                    sendNativeTx.isPending ||
                     isConfirmingSendNativeTransaction
                   }
                 >
-                  {isPendingSendNativeTransaction ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    </>
+                  {sendNativeTx.isPending ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
                   ) : isConfirmingSendNativeTransaction ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    </>
+                    <Loader2 className="w-4 h-4 animate-spin" />
                   ) : isConfirmedSendNativeTransaction ? (
-                    <>
-                      <Check className="w-4 h-4" />
-                    </>
+                    <Check className="w-4 h-4" />
                   ) : (
                     <>Send</>
                   )}
@@ -729,52 +565,15 @@ export default function SendNativeTokenForm() {
             )}
           </form.Subscribe>
           <div className="border-t-2 border-primary pt-4 mt-4">
-            <div className="flex flex-col gap-1">
-              <div className="flex flex-row gap-2 items-center">
-                {isPendingSendNativeTransaction ? (
-                  <div className="flex flex-row gap-2 items-center">
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <p>Signing transaction...</p>
-                  </div>
-                ) : isConfirmingSendNativeTransaction ? (
-                  <div className="flex flex-row gap-2 items-center">
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <p>Confirming transaction...</p>
-                  </div>
-                ) : isConfirmedSendNativeTransaction ? (
-                  <div className="flex flex-row gap-2 items-center">
-                    <Check className="w-4 h-4" />
-                    <p>Transaction confirmed</p>
-                  </div>
-                ) : (
-                  <div className="flex flex-row gap-2 items-center">
-                    <p className="text-muted-foreground">&gt;</p>
-                    <p>No pending transaction</p>
-                  </div>
-                )}
-              </div>
-              {sendNativeTransactionHash ? (
-                <div className="flex flex-row gap-2 items-center">
-                  <p className="text-muted-foreground">&gt;</p>
-                  <a
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="underline underline-offset-4 hover:cursor-pointer"
-                    href={`${selectedChainBlockExplorer}/tx/${sendNativeTransactionHash}`}
-                  >
-                    <div className="flex flex-row gap-2 items-center">
-                      {truncateHash(sendNativeTransactionHash)}
-                      <ExternalLink className="w-4 h-4" />
-                    </div>
-                  </a>
-                </div>
-              ) : (
-                <div className="flex flex-row gap-2 items-center">
-                  <p className="text-muted-foreground">&gt;</p>
-                  <p>No transaction hash</p>
-                </div>
-              )}
-            </div>
+            <TransactionStatus
+              isPending={sendNativeTx.isPending}
+              isConfirming={isConfirmingSendNativeTransaction}
+              isConfirmed={isConfirmedSendNativeTransaction}
+              txHash={sendNativeTx.data}
+              blockExplorerUrl={selectedChainBlockExplorer}
+              error={[formError, sendError, receiptError].filter(Boolean).join("\n") || null}
+              onClearError={handleClearError}
+            />
           </div>
         </div>
       </div>

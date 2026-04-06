@@ -15,8 +15,8 @@ function getInitialRpcUrl(): string {
     const stored = localStorage.getItem(SETTINGS_KEY);
     if (stored) {
       const settings = JSON.parse(stored) as WalletSettings;
-      if (settings.rpc?.chainId === mainnet.id && settings.rpc.url) {
-        return settings.rpc.url;
+      if (settings.activeRpc?.chainId === mainnet.id && settings.activeRpc.url) {
+        return settings.activeRpc.url;
       }
     }
   } catch {

@@ -5,7 +5,8 @@ import type { WalletSettings } from "@/types/setting";
 export const SETTINGS_KEY = "wallet-settings";
 
 export const settingsAtom = atomWithStorage<WalletSettings>(SETTINGS_KEY, {
-  rpc: null,
+  rpcList: [],
+  activeRpc: null,
   offlineMode: false,
 });
 

@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState } from "react";
 import { useAtom } from "jotai";
 import { contactsAtom } from "@/atoms/contactsAtom";
 import type { Contact } from "@/types/contact";
@@ -8,42 +8,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from "@/components/ui/input-group";
-import { Loader2, Search, QrCode, X, Check } from "lucide-react";
+import { Loader2, Search, Check } from "lucide-react";
 import { useEnsAddress } from "wagmi";
 import { normalize } from "viem/ens";
 import type { Address } from "viem";
-import QrScanner from "qr-scanner";
-
-function parseQrAddress(raw: string): string | null {
-  let candidate = raw.trim();
-  if (candidate.includes(":")) {
-    const parts = candidate.split(":");
-    candidate = parts[parts.length - 1];
-  }
-  candidate = candidate.split("@")[0].split("/")[0].split("?")[0];
-  if (/^0x[0-9a-fA-F]{40}$/.test(candidate)) {
-    return candidate;
-  }
-  return null;
-}
+import QrScannerButton from "@/components/qr-scanner-button";
 
 export default function AddContactForm() {
   const [contacts, setContacts] = useAtom(contactsAtom);
   const existingAddresses = contacts.map((c) => c.address.toLowerCase());
-  // QR scanner
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const scannerRef = useRef<QrScanner | null>(null);
-  const [isScanning, setIsScanning] = useState(false);
   const [isAdded, setIsAdded] = useState(false);
-
-  const stopScanner = useCallback(() => {
-    scannerRef.current?.stop();
-    scannerRef.current?.destroy();
-    scannerRef.current = null;
-    setIsScanning(false);
-  }, []);
-
-  useEffect(() => () => stopScanner(), [stopScanner]);
 
   const form = useForm({
     defaultValues: {
@@ -146,29 +120,7 @@ export default function AddContactForm() {
             },
           }}
         >
-          {(field) => {
-            function startScanner() {
-              if (!videoRef.current) return;
-              setIsScanning(true);
-              scannerRef.current = new QrScanner(
-                videoRef.current,
-                (result) => {
-                  const parsed = parseQrAddress(result.data);
-                  if (parsed) {
-                    field.handleChange(parsed);
-                    stopScanner();
-                  }
-                },
-                {
-                  returnDetailedScanResult: true,
-                  highlightScanRegion: true,
-                  highlightCodeOutline: true,
-                }
-              );
-              scannerRef.current.start().catch(() => stopScanner());
-            }
-
-            return (
+          {(field) => (
               <div className="flex flex-col gap-1">
                 <InputGroup className="border-primary">
                   <InputGroupInput
@@ -193,24 +145,9 @@ export default function AddContactForm() {
                         <Search className="w-3.5 h-3.5" />
                       )}
                     </InputGroupButton>
-                    <InputGroupButton
-                      type="button"
-                      onClick={() => isScanning ? stopScanner() : startScanner()}
-                      title={isScanning ? "Stop scanner" : "Scan QR code"}
-                      className="hover:cursor-pointer"
-                    >
-                      {isScanning ? (
-                        <X className="w-3.5 h-3.5" />
-                      ) : (
-                        <QrCode className="w-3.5 h-3.5" />
-                      )}
-                    </InputGroupButton>
+                    <QrScannerButton onScan={(address) => field.handleChange(address)} />
                   </InputGroupAddon>
                 </InputGroup>
-                <video
-                  ref={videoRef}
-                  className={isScanning ? "w-full aspect-square object-cover" : "hidden"}
-                />
                 <AddressFieldInfo
                   field={field}
                   ensAddress={ensAddress}
@@ -218,8 +155,7 @@ export default function AddContactForm() {
                   isErrorEnsAddress={isErrorEnsAddress}
                 />
               </div>
-            );
-          }}
+            )}
         </form.Field>
 
         {/* chain (optional) */}

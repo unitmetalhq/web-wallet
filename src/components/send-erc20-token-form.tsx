@@ -1,13 +1,11 @@
-"use client";
-
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useAtomValue } from "jotai";
 import type { UmKeystore } from "@/types/wallet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useForm, useStore } from "@tanstack/react-form";
 import type { AnyFieldApi } from "@tanstack/react-form";
-import { Loader2, Check, ExternalLink, Search } from "lucide-react";
+import { Loader2, Check, Search } from "lucide-react";
 import { formatEther, type Address, erc20Abi, formatUnits, parseUnits } from "viem";
 import {
   useConfig,
@@ -22,9 +20,10 @@ import { useMediaQuery } from "@/hooks/use-media-query";
 import { activeWalletAtom } from "@/atoms/activeWalletAtom";
 import { Skeleton } from "@/components/ui/skeleton";
 import { RefreshCcw } from "lucide-react";
-import { Keystore, Bytes } from "ox";
-import { mnemonicToAccount } from "viem/accounts";
-import { truncateHash } from "@/lib/utils";
+import { decryptWalletToAccount } from "@/lib/um-wallet";
+import { recordActivity } from "@/lib/activity";
+import type { ActivityRecord } from "@/types/activity";
+import { TransactionStatus } from "@/components/transaction-status";
 
 export default function SendErc20TokenForm() {
   // get Wagmi config
@@ -35,6 +34,9 @@ export default function SendErc20TokenForm() {
 
   // current active wallet
   const activeWallet = useAtomValue<UmKeystore | null>(activeWalletAtom);
+
+  // capture submit-time data to record on confirmation
+  const pendingActivityRef = useRef<Omit<ActivityRecord, "id" | "timestamp" | "txHash"> | null>(null);
 
   // get gas price
   const {
@@ -70,25 +72,7 @@ export default function SendErc20TokenForm() {
           return;
         }
 
-        // duplicate the active wallet
-        const currentActiveWallet = activeWallet;
-
-        // Derive the key using your password.
-        const key = Keystore.toKey(currentActiveWallet, {
-          password: value.password,
-        });
-
-        // Decrypt the mnemonic.
-        const mnemonicHex = Keystore.decrypt(currentActiveWallet, key);
-
-        // Convert the mnemonicHex to mnemonicBytes.
-        const mnemonicBytes = Bytes.fromHex(mnemonicHex);
-
-        // Convert the mnemonicBytes to a mnemonic phrase
-        const mnemonicPhrase = Bytes.toString(mnemonicBytes);
-
-        // Convert the mnemonic phrase to an account
-        const account = mnemonicToAccount(mnemonicPhrase);
+        const account = decryptWalletToAccount(activeWallet, value.password);
 
         // resolve ENS to address if needed
         let recipientAddress: Address;
@@ -104,13 +88,29 @@ export default function SendErc20TokenForm() {
           recipientAddress = value.receivingAddress as Address;
         }
 
-        // execute the send native transaction
+        const resolvedTokenAddr = tokenAddress.endsWith(".eth") ? tokenEnsAddress as Address : tokenAddress as Address;
+        const decimals = tokenData?.[3]?.result || 18;
+
+        // capture activity data before sending
+        pendingActivityRef.current = {
+          type: "erc20",
+          from: activeWallet.address,
+          to: recipientAddress,
+          chainId: 1,
+          tokenValue: parseUnits(value.amount, decimals).toString(),
+          tokenAddress: resolvedTokenAddr,
+          tokenSymbol: tokenData?.[2]?.result as string | undefined,
+          tokenDecimals: decimals,
+          ensName: value.receivingAddress.endsWith(".eth") ? value.receivingAddress : undefined,
+        };
+
+        // execute the send erc20 transaction
         sendErc20Transaction({
           account: account,
-          address: tokenAddress.endsWith(".eth") ? tokenEnsAddress as Address : tokenAddress as Address,
+          address: resolvedTokenAddr,
           abi: erc20Abi,
           functionName: "transfer",
-          args: [recipientAddress, parseUnits(value.amount, tokenData?.[3]?.result || 18)],
+          args: [recipientAddress, parseUnits(value.amount, decimals)],
           chainId: 1,
         });
       }
@@ -233,6 +233,13 @@ export default function SendErc20TokenForm() {
     resetSendErc20Transaction();
     form.reset();
   }
+
+  useEffect(() => {
+    if (isConfirmedSendErc20Transaction && sendErc20TransactionHash && pendingActivityRef.current) {
+      recordActivity({ ...pendingActivityRef.current, txHash: sendErc20TransactionHash });
+      pendingActivityRef.current = null;
+    }
+  }, [isConfirmedSendErc20Transaction, sendErc20TransactionHash]);
 
   useEffect(() => {
     // reset the transaction state
@@ -704,52 +711,13 @@ export default function SendErc20TokenForm() {
             )}
           </form.Subscribe>
           <div className="border-t-2 border-primary pt-4 mt-4">
-            <div className="flex flex-col gap-1">
-              <div className="flex flex-row gap-2 items-center">
-                {isPendingSendErc20Transaction ? (
-                  <div className="flex flex-row gap-2 items-center">
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <p>Signing transaction...</p>
-                  </div>
-                ) : isConfirmingSendErc20Transaction ? (
-                  <div className="flex flex-row gap-2 items-center">
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <p>Confirming transaction...</p>
-                  </div>
-                ) : isConfirmedSendErc20Transaction ? (
-                  <div className="flex flex-row gap-2 items-center">
-                    <Check className="w-4 h-4" />
-                    <p>Transaction confirmed</p>
-                  </div>
-                ) : (
-                  <div className="flex flex-row gap-2 items-center">
-                    <p className="text-muted-foreground">&gt;</p>
-                    <p>No pending transaction</p>
-                  </div>
-                )}
-              </div>
-              {sendErc20TransactionHash ? (
-                <div className="flex flex-row gap-2 items-center">
-                  <p className="text-muted-foreground">&gt;</p>
-                  <a
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="underline underline-offset-4 hover:cursor-pointer"
-                    href={`${selectedChainBlockExplorer}/tx/${sendErc20TransactionHash}`}
-                  >
-                    <div className="flex flex-row gap-2 items-center">
-                      {truncateHash(sendErc20TransactionHash)}
-                      <ExternalLink className="w-4 h-4" />
-                    </div>
-                  </a>
-                </div>
-              ) : (
-                <div className="flex flex-row gap-2 items-center">
-                  <p className="text-muted-foreground">&gt;</p>
-                  <p>No transaction hash</p>
-                </div>
-              )}
-            </div>
+            <TransactionStatus
+              isPending={isPendingSendErc20Transaction}
+              isConfirming={isConfirmingSendErc20Transaction}
+              isConfirmed={isConfirmedSendErc20Transaction}
+              txHash={sendErc20TransactionHash}
+              blockExplorerUrl={selectedChainBlockExplorer}
+            />
           </div>
         </div>
       </div>

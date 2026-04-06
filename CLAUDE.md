@@ -41,3 +41,13 @@ This is a React-based Ethereum web wallet built with Vite, designed to run entir
 **Component Styling**: Components use `class-variance-authority` (CVA) for variant-based styling. The `cn()` utility combines `clsx` and `tailwind-merge`.
 
 **Import Alias**: Use `@/` for imports from `src/` (e.g., `@/components/ui/button`).
+
+### Address Display
+
+Avoid truncating wallet addresses. Always show full addresses where space allows. To make long addresses easier to read, prefer techniques such as:
+- Monospace font (`font-mono`)
+- Breaking the address into visually distinct chunks (e.g., via CSS `letter-spacing` or wrapping at natural boundaries)
+- Larger dialog/container widths on desktop to give addresses room to breathe
+- Subtle color or opacity contrast on the checksum-significant characters if helpful
+
+Only fall back to truncation as a last resort when the layout truly cannot accommodate the full address (e.g., a single-line inline badge in a very narrow context).

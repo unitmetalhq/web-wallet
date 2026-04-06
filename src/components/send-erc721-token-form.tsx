@@ -1,11 +1,11 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useAtomValue } from "jotai";
 import type { UmKeystore } from "@/types/wallet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useForm, useStore } from "@tanstack/react-form";
 import type { AnyFieldApi } from "@tanstack/react-form";
-import { Loader2, Check, ExternalLink, Search } from "lucide-react";
+import { Loader2, Check, Search } from "lucide-react";
 import { type Address, erc721Abi } from "viem";
 import {
   useConfig,
@@ -21,9 +21,10 @@ import { useMediaQuery } from "@/hooks/use-media-query";
 import { activeWalletAtom } from "@/atoms/activeWalletAtom";
 import { Skeleton } from "@/components/ui/skeleton";
 import { RefreshCcw } from "lucide-react";
-import { Keystore, Bytes } from "ox";
-import { mnemonicToAccount } from "viem/accounts";
-import { truncateHash } from "@/lib/utils";
+import { decryptWalletToAccount } from "@/lib/um-wallet";
+import { recordActivity } from "@/lib/activity";
+import type { ActivityRecord } from "@/types/activity";
+import { TransactionStatus } from "@/components/transaction-status";
 
 export default function SendErc721TokenForm() {
   // get Wagmi config
@@ -34,6 +35,9 @@ export default function SendErc721TokenForm() {
 
   // current active wallet
   const activeWallet = useAtomValue<UmKeystore | null>(activeWalletAtom);
+
+  // capture submit-time data to record on confirmation
+  const pendingActivityRef = useRef<Omit<ActivityRecord, "id" | "timestamp" | "txHash"> | null>(null);
 
   // get gas price
   const {
@@ -67,25 +71,7 @@ export default function SendErc721TokenForm() {
           return;
         }
 
-        // duplicate the active wallet
-        const currentActiveWallet = activeWallet;
-
-        // Derive the key using your password.
-        const key = Keystore.toKey(currentActiveWallet, {
-          password: value.password,
-        });
-
-        // Decrypt the mnemonic.
-        const mnemonicHex = Keystore.decrypt(currentActiveWallet, key);
-
-        // Convert the mnemonicHex to mnemonicBytes.
-        const mnemonicBytes = Bytes.fromHex(mnemonicHex);
-
-        // Convert the mnemonicBytes to a mnemonic phrase
-        const mnemonicPhrase = Bytes.toString(mnemonicBytes);
-
-        // Convert the mnemonic phrase to an account
-        const account = mnemonicToAccount(mnemonicPhrase);
+        const account = decryptWalletToAccount(activeWallet, value.password);
 
         // resolve ENS to address if needed
         let recipientAddress: Address;
@@ -102,6 +88,17 @@ export default function SendErc721TokenForm() {
         const contractAddress = tokenAddress.endsWith(".eth")
           ? (tokenEnsAddress as Address)
           : (tokenAddress as Address);
+
+        // capture activity data before sending
+        pendingActivityRef.current = {
+          type: "erc721",
+          from: activeWallet.address,
+          to: recipientAddress,
+          chainId: 1,
+          tokenAddress: contractAddress,
+          nftId: value.tokenId,
+          ensName: value.receivingAddress.endsWith(".eth") ? value.receivingAddress : undefined,
+        };
 
         // execute the safeTransferFrom transaction
         sendErc721Transaction({
@@ -237,6 +234,13 @@ export default function SendErc721TokenForm() {
     resetSendErc721Transaction();
     form.reset();
   }
+
+  useEffect(() => {
+    if (isConfirmedSendErc721Transaction && sendErc721TransactionHash && pendingActivityRef.current) {
+      recordActivity({ ...pendingActivityRef.current, txHash: sendErc721TransactionHash });
+      pendingActivityRef.current = null;
+    }
+  }, [isConfirmedSendErc721Transaction, sendErc721TransactionHash]);
 
   useEffect(() => {
     resetSendErc721Transaction();
@@ -379,7 +383,7 @@ export default function SendErc721TokenForm() {
                         <span className="text-green-500">Owned by you</span>
                       ) : (
                         <span className="text-red-400">
-                          Owned by {truncateHash(ownerOf)}
+                          Owned by {ownerOf}
                         </span>
                       )
                     ) : null}
@@ -616,52 +620,13 @@ export default function SendErc721TokenForm() {
             )}
           </form.Subscribe>
           <div className="border-t-2 border-primary pt-4 mt-4">
-            <div className="flex flex-col gap-1">
-              <div className="flex flex-row gap-2 items-center">
-                {isPendingSendErc721Transaction ? (
-                  <div className="flex flex-row gap-2 items-center">
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <p>Signing transaction...</p>
-                  </div>
-                ) : isConfirmingSendErc721Transaction ? (
-                  <div className="flex flex-row gap-2 items-center">
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <p>Confirming transaction...</p>
-                  </div>
-                ) : isConfirmedSendErc721Transaction ? (
-                  <div className="flex flex-row gap-2 items-center">
-                    <Check className="w-4 h-4" />
-                    <p>Transaction confirmed</p>
-                  </div>
-                ) : (
-                  <div className="flex flex-row gap-2 items-center">
-                    <p className="text-muted-foreground">&gt;</p>
-                    <p>No pending transaction</p>
-                  </div>
-                )}
-              </div>
-              {sendErc721TransactionHash ? (
-                <div className="flex flex-row gap-2 items-center">
-                  <p className="text-muted-foreground">&gt;</p>
-                  <a
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="underline underline-offset-4 hover:cursor-pointer"
-                    href={`${selectedChainBlockExplorer}/tx/${sendErc721TransactionHash}`}
-                  >
-                    <div className="flex flex-row gap-2 items-center">
-                      {truncateHash(sendErc721TransactionHash)}
-                      <ExternalLink className="w-4 h-4" />
-                    </div>
-                  </a>
-                </div>
-              ) : (
-                <div className="flex flex-row gap-2 items-center">
-                  <p className="text-muted-foreground">&gt;</p>
-                  <p>No transaction hash</p>
-                </div>
-              )}
-            </div>
+            <TransactionStatus
+              isPending={isPendingSendErc721Transaction}
+              isConfirming={isConfirmingSendErc721Transaction}
+              isConfirmed={isConfirmedSendErc721Transaction}
+              txHash={sendErc721TransactionHash}
+              blockExplorerUrl={selectedChainBlockExplorer}
+            />
           </div>
         </div>
       </div>

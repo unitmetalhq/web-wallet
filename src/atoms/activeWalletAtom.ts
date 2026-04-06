@@ -1,4 +1,4 @@
-import { atom } from "jotai";
+import { atomWithStorage } from "jotai/utils";
 import type { UmKeystore } from "@/types/wallet";
 
-export const activeWalletAtom = atom<UmKeystore | null>(null);
+export const activeWalletAtom = atomWithStorage<UmKeystore | null>("activeWallet", null);
