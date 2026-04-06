@@ -43,50 +43,7 @@ interface UmWalletBackup {
   data: string;              // base64 AES-GCM ciphertext (plaintext is JSON)
 }
 
-// ── Crypto ───────────────────────────────────────────────────────────────────
-
-const KDF_ITERATIONS = 600_000;
-
-function toBase64(bytes: Uint8Array): string {
-  return btoa(String.fromCharCode(...bytes));
-}
-
-async function encrypt(
-  plaintext: string,
-  password: string
-): Promise<{ kdfSalt: string; iv: string; data: string }> {
-  const enc = new TextEncoder();
-  const kdfSalt = crypto.getRandomValues(new Uint8Array(16));
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-
-  const keyMaterial = await crypto.subtle.importKey(
-    "raw",
-    enc.encode(password),
-    "PBKDF2",
-    false,
-    ["deriveKey"]
-  );
-
-  const key = await crypto.subtle.deriveKey(
-    { name: "PBKDF2", salt: kdfSalt, iterations: KDF_ITERATIONS, hash: "SHA-256" },
-    keyMaterial,
-    { name: "AES-GCM", length: 256 },
-    false,
-    ["encrypt"]
-  );
-
-  const ciphertext = await crypto.subtle.encrypt(
-    { name: "AES-GCM", iv },
-    key,
-    enc.encode(plaintext)
-  );
-
-  return {
-    kdfSalt: toBase64(kdfSalt),
-    iv: toBase64(iv),
-    data: toBase64(new Uint8Array(ciphertext)),
-  };
-}
+import { KDF_ITERATIONS, encrypt } from "@/lib/crypto";
 
 // ── Component ────────────────────────────────────────────────────────────────
 
@@ -149,7 +106,7 @@ export default function BackupAll() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `um-wallet-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      a.download = `unitmetal-web-wallet-backup-${new Date().toISOString().slice(0, 10)}.json`;
       a.click();
       URL.revokeObjectURL(url);
 

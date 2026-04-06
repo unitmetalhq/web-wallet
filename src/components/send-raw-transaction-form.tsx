@@ -19,7 +19,7 @@ import { decryptWalletToAccount } from "@/lib/um-wallet";
 import { truncateAddress } from "@/lib/utils";
 import { TransactionStatus } from "@/components/transaction-status";
 
-function validateTransaction(value: string): WagmiPreparedTransaction | string {
+export function validateTransaction(value: string): WagmiPreparedTransaction | string {
   if (!value) {
     return "Please enter the transaction JSON";
   }
