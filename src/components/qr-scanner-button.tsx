@@ -39,7 +39,7 @@ export default function QrScannerButton({
     scannerRef.current = null;
   }, []);
 
-  function startScanner() {
+  const startScanner = useCallback(() => {
     if (!videoRef.current) return;
     scannerRef.current = new QrScanner(
       videoRef.current,
@@ -57,7 +57,7 @@ export default function QrScannerButton({
       }
     );
     scannerRef.current.start().catch(() => setOpen(false));
-  }
+  }, [onScan]);
 
   function handleOpenChange(next: boolean) {
     if (!next) stopScanner();
@@ -71,7 +71,7 @@ export default function QrScannerButton({
       const id = setTimeout(() => startScanner(), 50);
       return () => clearTimeout(id);
     }
-  }, [open]);
+  }, [open, startScanner]);
 
   // stop on unmount
   useEffect(() => () => stopScanner(), [stopScanner]);
