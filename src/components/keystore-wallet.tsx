@@ -11,7 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import CopyButton from "@/components/copy-button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
-export default function BackupWallet() {
+export default function KeystoreWallet() {
   const [outputBackupKeystore, setOutputBackupKeystore] =
     useState<UmKeystore | null>(null);
 
@@ -105,9 +105,9 @@ export default function BackupWallet() {
   }
 
   return (
-    <div className="flex flex-col border-2 border-primary gap-2 pb-8">
+    <div className="flex flex-col border-2 border-primary gap-2 pb-8 h-fit">
       <div className="flex flex-row justify-between items-center bg-primary text-secondary pl-1">
-        <h1 className="text-md font-bold">Backup</h1>
+        <h1 className="text-md font-bold">Keystore</h1>
       </div>
       <div className="flex flex-col gap-4 px-4 py-2">
         <Tabs defaultValue="encrypt" className="w-full">

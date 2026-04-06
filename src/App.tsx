@@ -3,11 +3,13 @@ import { desktopTabAtom } from "@/atoms/desktopTabAtom";
 import ManageWallet from "@/components/manage-wallet";
 import SendTokens from "@/components/send-tokens";
 import Balances from "@/components/balances";
-import BackupWallet from "@/components/backup-wallet";
+import BackupWallet from "@/components/keystore-wallet";
 import MobileNavbar from "@/components/mobile-navbar";
 import WalletSettings from "@/components/wallet-settings";
 import ManageAddressBook from "@/components/manage-address-book";
 import Activity from "@/components/activity";
+import LocalDeviceBackup from "@/components/local-device-backup";
+import CloudSync from "@/components/cloud-sync";
 
 export default function App() {
   const desktopTab = useAtomValue(desktopTabAtom);
@@ -38,8 +40,10 @@ export default function App() {
           </div>
         )}
         {desktopTab === "backup" && (
-          <div className="w-[760px] mx-auto">
+          <div className="grid lg:grid-cols-3 gap-4 w-full">
             <BackupWallet />
+            <LocalDeviceBackup />
+            <CloudSync />
           </div>
         )}
         {desktopTab === "settings" && (

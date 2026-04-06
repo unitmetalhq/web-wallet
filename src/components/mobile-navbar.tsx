@@ -1,11 +1,13 @@
 import { useState } from "react";
 import ManageWallet from "@/components/manage-wallet";
-import BackupWallet from "@/components/backup-wallet";
+import KeystoreWallet from "@/components/keystore-wallet";
 import SendTokens from "@/components/send-tokens";
 import Balances from "@/components/balances";
 import WalletSettings from "@/components/wallet-settings";
 import ManageAddressBook from "@/components/manage-address-book";
 import Activity from "@/components/activity";
+import LocalDeviceBackup from "@/components/local-device-backup";
+import CloudSync from "@/components/cloud-sync";
 import { Wallet, BookUser, ArrowUpRight, TableProperties, Save, Settings } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -35,7 +37,13 @@ export default function MobileNavbar() {
         {activeTab === "address-book" && <ManageAddressBook />}
         {activeTab === "send" && <SendTokens />}
         {activeTab === "activity" && <Activity />}
-        {activeTab === "backup" && <BackupWallet />}
+        {activeTab === "backup" && (
+          <div className="grid grid-cols-1 gap-4">
+            <KeystoreWallet />
+            <LocalDeviceBackup />
+            <CloudSync />
+          </div>
+        )}
         {activeTab === "settings" && <WalletSettings />}
       </div>
 
