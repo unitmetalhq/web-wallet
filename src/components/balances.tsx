@@ -5,32 +5,66 @@ import { activeWalletAtom } from "@/atoms/activeWalletAtom";
 import { offlineModeAtom } from "@/atoms/settingsAtom";
 import { customTokensAtom } from "@/atoms/customTokensAtom";
 import type { TokenListToken } from "@/atoms/customTokensAtom";
+import { customNftsAtom } from "@/atoms/customNftsAtom";
+import type { NftCollection } from "@/atoms/customNftsAtom";
 import { useBalance, useConfig, useReadContracts } from "wagmi";
 import { useQuery } from "@tanstack/react-query";
 import { formatUnits, erc20Abi } from "viem";
 import type { Address } from "viem";
 import { Skeleton } from "@/components/ui/skeleton";
-import { RefreshCw, Copy, Check, Plus, Trash2, BadgeCheck, RotateCw } from "lucide-react";
+import { RefreshCw, Copy, Check, Plus, Trash2, BadgeCheck, RotateCw, MoreVertical } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
 import AddCustomToken from "@/components/add-custom-token";
+import AddCustomNft from "@/components/add-custom-nft";
 
 const ETH_SENTINEL = "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
 const CHAIN_ID = 1;
 
+const erc721EnumerableAbi = [
+  {
+    name: "balanceOf",
+    type: "function",
+    stateMutability: "view",
+    inputs: [{ name: "owner", type: "address" }],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    name: "tokenOfOwnerByIndex",
+    type: "function",
+    stateMutability: "view",
+    inputs: [
+      { name: "owner", type: "address" },
+      { name: "index", type: "uint256" },
+    ],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+] as const;
+
 type TokenWithMeta = TokenListToken & { isVerified: boolean };
+type NftCollectionEntry = NftCollection & { isVerified: boolean };
+type OwnedNft = { collection: NftCollectionEntry; tokenId: bigint };
 
 export default function Balances() {
   const config = useConfig();
   const activeWallet = useAtomValue<UmKeystore | null>(activeWalletAtom);
   const offlineMode = useAtomValue(offlineModeAtom);
   const [customTokens, setCustomTokens] = useAtom(customTokensAtom);
-  const [showAddForm, setShowAddForm] = useState(false);
+  const [customNfts, setCustomNfts] = useAtom(customNftsAtom);
+  const [showAddTokenForm, setShowAddTokenForm] = useState(false);
+  const [showAddNftForm, setShowAddNftForm] = useState(false);
 
   const address = activeWallet?.address as Address | undefined;
   const isQueryEnabled = !!address && !offlineMode;
   const nativeCurrency = config.chains.find((c) => c.id === CHAIN_ID)?.nativeCurrency;
 
-  // ── Token list from public/token-list.json ──────────────────────────────────
+  // ── Token list ──────────────────────────────────────────────────────────────
 
   const { data: tokenList, refetch: refetchTokenList } = useQuery({
     queryKey: ["token-list"],
@@ -46,19 +80,17 @@ export default function Balances() {
     (t) => t.chainId === CHAIN_ID && t.address.toLowerCase() !== ETH_SENTINEL
   ) ?? [];
 
-  // ── Merge: list tokens + custom tokens (deduped) ────────────────────────────
-
   const customForChain = customTokens.filter((t) => t.chainId === CHAIN_ID);
-  const dedupedCustom = customForChain.filter(
+  const dedupedCustomTokens = customForChain.filter(
     (ct) => !listTokens.some((lt) => lt.address.toLowerCase() === ct.address.toLowerCase())
   );
 
   const allTokens: TokenWithMeta[] = [
     ...listTokens.map((t) => ({ ...t, isVerified: true })),
-    ...dedupedCustom.map((t) => ({ ...t, isVerified: false })),
+    ...dedupedCustomTokens.map((t) => ({ ...t, isVerified: false })),
   ];
 
-  // ── Balance queries ─────────────────────────────────────────────────────────
+  // ── Token balances ──────────────────────────────────────────────────────────
 
   const { data: tokenBalances, isLoading: isLoadingTokens, refetch: refetchTokens } = useReadContracts({
     contracts: allTokens.map((token) => ({
@@ -77,16 +109,105 @@ export default function Balances() {
     query: { enabled: isQueryEnabled, refetchOnMount: false },
   });
 
+  // ── NFT list ────────────────────────────────────────────────────────────────
+
+  const { data: nftListData, refetch: refetchNftList } = useQuery({
+    queryKey: ["nft-list"],
+    queryFn: async () => {
+      const res = await fetch("/nft-list.json");
+      if (!res.ok) throw new Error("Failed to fetch NFT list");
+      return res.json() as Promise<{ collections: NftCollection[] }>;
+    },
+    staleTime: Infinity,
+  });
+
+  const listNfts: NftCollection[] = nftListData?.collections.filter(
+    (c) => c.chainId === CHAIN_ID
+  ) ?? [];
+
+  const customNftsForChain = customNfts.filter((c) => c.chainId === CHAIN_ID);
+  const dedupedCustomNfts = customNftsForChain.filter(
+    (cn) => !listNfts.some((ln) => ln.address.toLowerCase() === cn.address.toLowerCase())
+  );
+
+  const allNftCollections: NftCollectionEntry[] = [
+    ...listNfts.map((c) => ({ ...c, isVerified: true })),
+    ...dedupedCustomNfts.map((c) => ({ ...c, isVerified: false })),
+  ];
+
+  // ── NFT step 1: balanceOf per collection ────────────────────────────────────
+
+  const {
+    data: nftCollectionBalances,
+    isLoading: isLoadingNftBalances,
+    refetch: refetchNftBalances,
+  } = useReadContracts({
+    contracts: allNftCollections.map((c) => ({
+      address: c.address,
+      abi: erc721EnumerableAbi,
+      functionName: "balanceOf" as const,
+      args: [address!] as [Address],
+      chainId: CHAIN_ID,
+    })),
+    query: { enabled: isQueryEnabled && allNftCollections.length > 0, refetchOnMount: false },
+  });
+
+  // ── NFT step 2: tokenOfOwnerByIndex for collections with balance > 0 ────────
+
+  const tokenIndexRequests = allNftCollections.flatMap((collection, ci) => {
+    const raw = nftCollectionBalances?.[ci];
+    if (raw?.status !== "success") return [];
+    const count = Number(raw.result as bigint);
+    return Array.from({ length: count }, (_, i) => ({ collection, index: i }));
+  });
+
+  const {
+    data: tokenIdResults,
+    isLoading: isLoadingTokenIds,
+    refetch: refetchTokenIds,
+  } = useReadContracts({
+    contracts: tokenIndexRequests.map(({ collection, index }) => ({
+      address: collection.address,
+      abi: erc721EnumerableAbi,
+      functionName: "tokenOfOwnerByIndex" as const,
+      args: [address!, BigInt(index)] as [Address, bigint],
+      chainId: CHAIN_ID,
+    })),
+    query: { enabled: isQueryEnabled && tokenIndexRequests.length > 0, refetchOnMount: false },
+  });
+
+  // ── Owned NFTs ──────────────────────────────────────────────────────────────
+
+  const ownedNfts: OwnedNft[] = tokenIndexRequests
+    .map((req, i) => {
+      const raw = tokenIdResults?.[i];
+      if (raw?.status !== "success") return null;
+      return { collection: req.collection, tokenId: raw.result as bigint };
+    })
+    .filter((t): t is OwnedNft => t !== null);
+
+  const isLoadingNfts = isLoadingNftBalances || isLoadingTokenIds;
+
   // ── Handlers ────────────────────────────────────────────────────────────────
 
-  function handleRemoveCustom(tokenAddress: string) {
+  function handleRemoveCustomToken(tokenAddress: string) {
     setCustomTokens((prev) => prev.filter((t) => t.address.toLowerCase() !== tokenAddress.toLowerCase()));
   }
 
-  function handleRefreshAll() {
+  function handleRemoveCustomNft(collectionAddress: string) {
+    setCustomNfts((prev) => prev.filter((c) => c.address.toLowerCase() !== collectionAddress.toLowerCase()));
+  }
+
+  function handleRefreshTokens() {
     refetchTokenList();
     refetchNative();
     refetchTokens();
+  }
+
+  function handleRefreshNfts() {
+    refetchNftList();
+    refetchNftBalances();
+    refetchTokenIds();
   }
 
   return (
@@ -95,90 +216,166 @@ export default function Balances() {
         <h1 className="text-md font-bold">Balances</h1>
       </div>
 
-      <div className="flex flex-row justify-end items-end px-4">
-        <Button
-          type="button"
-          variant="outline"
-          onClick={handleRefreshAll}
-          className="hover:cursor-pointer"
-        >
-          <RotateCw />
-          Refresh all
-        </Button>
-      </div>
-      {/* Native balance */}
-      <div className="flex flex-col gap-2 px-4">
-        <NativeBalanceRow
-          address={address}
-          chainId={CHAIN_ID}
-          name={nativeCurrency?.name ?? "Native"}
-          symbol={nativeCurrency?.symbol ?? "—"}
-          decimals={nativeCurrency?.decimals ?? 18}
-          isQueryEnabled={isQueryEnabled}
-        />
-      </div>
-
-      {/* ERC-20 balances */}
-      {allTokens.length > 0 && (
-        <>
-          <div className="px-4">
-            <div className="border-t border-border" />
-          </div>
-          <div className="flex flex-col gap-4 px-4 py-2">
-            {allTokens.map((token, i) => {
-              const raw = tokenBalances?.[i];
-              const rawBalance = raw?.status === "success" ? (raw.result as bigint) : undefined;
-
-              // always show custom tokens; hide list tokens with zero balance
-              if (!token.isVerified && rawBalance === undefined && !isLoadingTokens) {
-                // custom token, balance not loaded yet — still render
-              } else if (token.isVerified) {
-                if (!isQueryEnabled) return null;
-                if (!isLoadingTokens && (rawBalance === undefined || rawBalance === 0n)) return null;
-              }
-
-              return (
-                <BalanceRow
-                  key={token.address}
-                  name={token.name}
-                  symbol={token.symbol}
-                  address={token.address}
-                  value={formatUnits(rawBalance ?? BigInt(0), token.decimals)}
-                  isLoading={isQueryEnabled && isLoadingTokens}
-                  isError={raw?.status === "failure"}
-                  isVerified={token.isVerified}
-                  onRefresh={refetchTokens}
-                  onRemove={token.isVerified ? undefined : () => handleRemoveCustom(token.address)}
-                />
-              );
-            })}
-          </div>
-        </>
-      )}
-
-      {/* Add custom token */}
-      <div className="px-4">
-        <div className="border-t border-border mb-3" />
-        {showAddForm ? (
-          <AddCustomToken
-            onAdd={(token) => {
-              setCustomTokens((prev) => [...prev, token]);
-              setShowAddForm(false);
-            }}
-            onCancel={() => setShowAddForm(false)}
-          />
-        ) : (
-
-          <button
+      <Tabs defaultValue="token" className="px-0 gap-0">
+        <div className="flex flex-row items-center justify-between mx-4 mb-2">
+          <TabsList>
+            <TabsTrigger value="token">Token</TabsTrigger>
+            <TabsTrigger value="nft">NFT</TabsTrigger>
+          </TabsList>
+          <Button
             type="button"
-            onClick={() => setShowAddForm(true)}
-            className="flex flex-row items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground hover:cursor-pointer"
+            variant="outline"
+            onClick={() => { handleRefreshTokens(); handleRefreshNfts(); }}
+            className="hover:cursor-pointer"
           >
-            <Plus className="w-3.5 h-3.5" />
-            Add custom token
-          </button>
-        )}
-      </div>
+            <RotateCw />
+            Refresh
+          </Button>
+        </div>
+
+        {/* ── Token tab ───────────────────────────────────────────────────── */}
+        <TabsContent value="token" className="flex flex-col gap-2">
+
+          {/* Native balance */}
+          <div className="flex flex-col gap-2 px-4">
+            <NativeBalanceRow
+              address={address}
+              chainId={CHAIN_ID}
+              name={nativeCurrency?.name ?? "Native"}
+              symbol={nativeCurrency?.symbol ?? "—"}
+              decimals={nativeCurrency?.decimals ?? 18}
+              isQueryEnabled={isQueryEnabled}
+            />
+          </div>
+
+          {/* ERC-20 balances */}
+          {allTokens.length > 0 && (
+            <>
+              <div className="px-4">
+                <div className="border-t border-border" />
+              </div>
+              <div className="flex flex-col gap-4 px-4 py-2">
+                {allTokens.map((token, i) => {
+                  const raw = tokenBalances?.[i];
+                  const rawBalance = raw?.status === "success" ? (raw.result as bigint) : undefined;
+                  const isCustomAdded = customForChain.some(
+                    (ct) => ct.address.toLowerCase() === token.address.toLowerCase()
+                  );
+
+                  if (token.isVerified && !isCustomAdded) {
+                    if (!isQueryEnabled) return null;
+                    if (!isLoadingTokens && (rawBalance === undefined || rawBalance === 0n)) return null;
+                  }
+
+                  return (
+                    <BalanceRow
+                      key={token.address}
+                      name={token.name}
+                      symbol={token.symbol}
+                      address={token.address}
+                      value={formatUnits(rawBalance ?? BigInt(0), token.decimals)}
+                      isLoading={isQueryEnabled && isLoadingTokens}
+                      isError={raw?.status === "failure"}
+                      isVerified={token.isVerified}
+                      onRefresh={refetchTokens}
+                      onRemove={token.isVerified ? undefined : () => handleRemoveCustomToken(token.address)}
+                    />
+                  );
+                })}
+              </div>
+            </>
+          )}
+
+          {/* Add custom token */}
+          <div className="px-4">
+            <div className="border-t border-border mb-3" />
+            {showAddTokenForm ? (
+              <AddCustomToken
+                onAdd={(token) => {
+                  setCustomTokens((prev) => [...prev, token]);
+                  setShowAddTokenForm(false);
+                }}
+                onCancel={() => setShowAddTokenForm(false)}
+              />
+            ) : (
+              <button
+                type="button"
+                onClick={() => setShowAddTokenForm(true)}
+                className="flex flex-row items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground hover:cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Add custom token
+              </button>
+            )}
+          </div>
+        </TabsContent>
+
+        {/* ── NFT tab ─────────────────────────────────────────────────────── */}
+        <TabsContent value="nft" className="flex flex-col gap-2">
+          <div className="flex flex-col gap-2 px-4">
+            {isLoadingNfts ? (
+              <div className="flex flex-col gap-3">
+                <Skeleton className="w-full h-8" />
+                <Skeleton className="w-full h-8" />
+              </div>
+            ) : (
+              <>
+                {ownedNfts.length === 0 && customNftsForChain.length === 0 && (
+                  <p className="text-xs text-muted-foreground">No NFTs found</p>
+                )}
+                {ownedNfts.map((nft) => (
+                  <NftRow
+                    key={`${nft.collection.address}-${nft.tokenId}`}
+                    nft={nft}
+                    onRefresh={handleRefreshNfts}
+                    onRemoveCollection={
+                      nft.collection.isVerified
+                        ? undefined
+                        : () => handleRemoveCustomNft(nft.collection.address)
+                    }
+                  />
+                ))}
+                {/* Custom collections with no owned tokens — always show */}
+                {customNftsForChain
+                  .filter((c) => !ownedNfts.some(
+                    (n) => n.collection.address.toLowerCase() === c.address.toLowerCase()
+                  ))
+                  .map((collection) => (
+                    <NftCollectionRow
+                      key={collection.address}
+                      collection={{ ...collection, isVerified: false }}
+                      onRefresh={handleRefreshNfts}
+                      onRemove={() => handleRemoveCustomNft(collection.address)}
+                    />
+                  ))}
+              </>
+            )}
+          </div>
+
+          {/* Add custom NFT collection */}
+          <div className="px-4">
+            <div className="border-t border-border mb-3" />
+            {showAddNftForm ? (
+              <AddCustomNft
+                onAdd={(collection) => {
+                  setCustomNfts((prev) => [...prev, collection]);
+                  setShowAddNftForm(false);
+                }}
+                onCancel={() => setShowAddNftForm(false)}
+              />
+            ) : (
+              <button
+                type="button"
+                onClick={() => setShowAddNftForm(true)}
+                className="flex flex-row items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground hover:cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Add custom NFT collection
+              </button>
+            )}
+          </div>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
@@ -257,10 +454,7 @@ function BalanceRow({
         <div className="flex flex-row gap-2 items-center">
           <h3>{name}</h3>
           <h3 className="text-muted-foreground">{symbol}</h3>
-          {/* verified: token comes from the curated token list */}
-          {isVerified && (
-            <BadgeCheck className="w-3.5 h-3.5" />
-          )}
+          {isVerified && <BadgeCheck className="w-3.5 h-3.5" />}
           {address && (
             <button
               type="button"
@@ -291,16 +485,127 @@ function BalanceRow({
             <RefreshCw className={`w-3 h-3 ${isLoading ? "animate-spin" : ""}`} />
           </button>
           {onRemove && (
-            <button
-              type="button"
-              onClick={onRemove}
-              className="text-muted-foreground hover:text-destructive hover:cursor-pointer"
-              title="Remove custom token"
-            >
-              <Trash2 className="w-3 h-3" />
-            </button>
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <button
+                    type="button"
+                    className="text-muted-foreground hover:text-foreground hover:cursor-pointer"
+                  />
+                }
+              >
+                <MoreVertical className="w-3 h-3" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem variant="destructive" onClick={onRemove}>
+                  <Trash2 className="w-3 h-3" />
+                  Remove
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ── NftCollectionRow — custom collection with no owned tokens ─────────────────
+
+function NftCollectionRow({
+  collection,
+  onRefresh,
+  onRemove,
+}: {
+  collection: NftCollectionEntry;
+  onRefresh: () => void;
+  onRemove: () => void;
+}) {
+  return (
+    <div className="flex flex-row justify-between items-center gap-2">
+      <div className="flex flex-row gap-2 items-center">
+        <span className="font-medium">{collection.name}</span>
+        <span className="text-muted-foreground">{collection.symbol}</span>
+      </div>
+      <div className="flex flex-row gap-2 items-center">
+        <span className="text-xs text-muted-foreground">--</span>
+        <button
+          type="button"
+          onClick={onRefresh}
+          className="text-muted-foreground hover:text-foreground hover:cursor-pointer"
+        >
+          <RefreshCw className="w-3 h-3" />
+        </button>
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <button
+                type="button"
+                className="text-muted-foreground hover:text-foreground hover:cursor-pointer"
+              />
+            }
+          >
+            <MoreVertical className="w-3 h-3" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem variant="destructive" onClick={onRemove}>
+              <Trash2 className="w-3 h-3" />
+              Remove
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+    </div>
+  );
+}
+
+// ── NftRow ────────────────────────────────────────────────────────────────────
+
+function NftRow({
+  nft,
+  onRefresh,
+  onRemoveCollection,
+}: {
+  nft: OwnedNft;
+  onRefresh: () => void;
+  onRemoveCollection?: () => void;
+}) {
+  return (
+    <div className="flex flex-row justify-between items-center gap-2">
+      <div className="flex flex-row gap-2 items-center">
+        <span className="font-medium">{nft.collection.name}</span>
+        <span className="text-muted-foreground">{nft.collection.symbol}</span>
+        {nft.collection.isVerified && <BadgeCheck className="w-3.5 h-3.5" />}
+      </div>
+      <div className="flex flex-row gap-2 items-center">
+        <span className="text-muted-foreground font-mono">#{nft.tokenId.toString()}</span>
+        <button
+          type="button"
+          onClick={onRefresh}
+          className="text-muted-foreground hover:text-foreground hover:cursor-pointer"
+        >
+          <RefreshCw className="w-3 h-3" />
+        </button>
+        {onRemoveCollection && (
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <button
+                  type="button"
+                  className="text-muted-foreground hover:text-foreground hover:cursor-pointer"
+                />
+              }
+            >
+              <MoreVertical className="w-3 h-3" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem variant="destructive" onClick={onRemoveCollection}>
+                <Trash2 className="w-3 h-3" />
+                Remove collection
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
       </div>
     </div>
   );

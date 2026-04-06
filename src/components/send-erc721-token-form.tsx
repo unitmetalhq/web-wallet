@@ -9,6 +9,7 @@ import { Loader2, Check, Search } from "lucide-react";
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from "@/components/ui/input-group";
 import QrScannerButton from "@/components/qr-scanner-button";
 import AddressBookPickerButton from "@/components/address-book-picker-button";
+import { NftPickerDialog } from "@/components/nft-picker-dialog";
 import { type Address, erc721Abi } from "viem";
 import {
   useConfig,
@@ -28,6 +29,8 @@ import { decryptWalletToAccount } from "@/lib/um-wallet";
 import { recordActivity } from "@/lib/activity";
 import type { ActivityRecord } from "@/types/activity";
 import { TransactionStatus } from "@/components/transaction-status";
+import { InformationDialog } from "@/components/information-dialog";
+
 
 export default function SendErc721TokenForm() {
   // get Wagmi config
@@ -285,33 +288,43 @@ export default function SendErc721TokenForm() {
                 <div className="flex flex-row gap-2 items-center justify-between">
                   <p className="text-muted-foreground">NFT Contract</p>
                 </div>
-                <InputGroup className="border-primary">
-                  <InputGroupInput
-                    id={field.name}
-                    name={field.name}
-                    value={field.state.value || ""}
-                    onChange={(e) => field.handleChange(e.target.value)}
-                    type="text"
-                    placeholder="Address (0x...) or ENS (.eth)"
-                    className="text-base rounded-none"
-                    required
+                <div className="grid grid-cols-[auto_1fr] gap-2 items-start">
+                  <NftPickerDialog
+                    contractValue={field.state.value}
+                    tokenIdValue={tokenId}
+                    onSelect={(addr, id) => {
+                      form.setFieldValue("tokenAddress", addr);
+                      form.setFieldValue("tokenId", id);
+                    }}
                   />
-                  <InputGroupAddon align="inline-end">
-                    <InputGroupButton
-                      type="button"
-                      onClick={() => refetchTokenEnsAddress()}
-                      title="Look up ENS"
-                      className="hover:cursor-pointer"
-                    >
-                      {isLoadingTokenEnsAddress ? (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      ) : (
-                        <Search className="w-3.5 h-3.5" />
-                      )}
-                    </InputGroupButton>
-                    <QrScannerButton onScan={(address) => field.handleChange(address)} />
-                  </InputGroupAddon>
-                </InputGroup>
+                  <InputGroup className="border-primary">
+                    <InputGroupInput
+                      id={field.name}
+                      name={field.name}
+                      value={field.state.value || ""}
+                      onChange={(e) => field.handleChange(e.target.value)}
+                      type="text"
+                      placeholder="Address (0x...) or ENS (.eth)"
+                      className="text-base rounded-none"
+                      required
+                    />
+                    <InputGroupAddon align="inline-end">
+                      <InputGroupButton
+                        type="button"
+                        onClick={() => refetchTokenEnsAddress()}
+                        title="Look up ENS"
+                        className="hover:cursor-pointer"
+                      >
+                        {isLoadingTokenEnsAddress ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Search className="w-3.5 h-3.5" />
+                        )}
+                      </InputGroupButton>
+                      <QrScannerButton onScan={(address) => field.handleChange(address)} />
+                    </InputGroupAddon>
+                  </InputGroup>
+                </div>
                 <TokenAddressFieldInfo
                   field={field}
                   ensAddress={tokenEnsAddress}
@@ -352,7 +365,7 @@ export default function SendErc721TokenForm() {
                 <div className="flex flex-row gap-2 items-center justify-between">
                   <p className="text-muted-foreground">Token ID</p>
                 </div>
-                <div className="flex flex-row items-center justify-between my-2">
+                <div className="flex flex-row items-center justify-between">
                   {isDesktop ? (
                     <input
                       id={field.name}
@@ -380,7 +393,7 @@ export default function SendErc721TokenForm() {
                   )}
                 </div>
                 <div className="flex flex-row items-center justify-between">
-                  <div className="text-muted-foreground text-sm">
+                  <div className="text-muted-foreground text-xs">
                     {isTokenIdQueryEnabled && isLoadingTokenData ? (
                       <Skeleton className="w-24 h-4" />
                     ) : isTokenIdQueryEnabled && ownerOf ? (
@@ -388,10 +401,10 @@ export default function SendErc721TokenForm() {
                         <span className="text-green-500">Owned by you</span>
                       ) : (
                         <span className="text-red-400">
-                          Owned by {ownerOf}
+                          Owned by <span className="font-mono">{ownerOf}</span>
                         </span>
                       )
-                    ) : null}
+                    ) : <span className="text-muted-foreground">--</span>}
                   </div>
                   <Button
                     variant="ghost"
@@ -428,8 +441,12 @@ export default function SendErc721TokenForm() {
           >
             {(field) => (
               <div className="flex flex-col gap-2">
-                <div className="flex flex-row gap-2 items-center justify-between">
+                <div className="flex flex-row gap-2 items-center">
                   <p className="text-muted-foreground">Recipient</p>
+                  <InformationDialog
+                    title="Recipient"
+                    content="Enter the address of the recipient. You can also enter an ENS name to resolve it to an address. Make sure to click the search icon to resolve the ENS name after input."
+                  />
                 </div>
                 <InputGroup className="border-primary">
                   <InputGroupInput
@@ -441,6 +458,10 @@ export default function SendErc721TokenForm() {
                     placeholder="Address (0x...) or ENS (.eth)"
                     className="text-base rounded-none"
                     required
+                    autoComplete="off"
+                    data-1p-ignore
+                    data-lpignore="true"
+                    data-form-type="other"
                   />
                   <InputGroupAddon align="inline-end">
                     <InputGroupButton

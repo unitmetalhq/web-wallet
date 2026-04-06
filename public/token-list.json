@@ -1,17 +1,8 @@
 {
   "name": "UnitMetal Token List based on Uniswap Labs Default",
   "timestamp": "2026-04-06T08:42:03.220Z",
-  "version": {
-    "major": 18,
-    "minor": 10,
-    "patch": 0
-  },
+  "version": "0.0.1",
   "tags": {},
-  "logoURI": "ipfs://QmNa8mQkrNKp1WEEeGjFezDmDeodkWRevGFN8JCV7b4Xir",
-  "keywords": [
-    "uniswap",
-    "default"
-  ],
   "tokens": [
     {
       "chainId": 1,

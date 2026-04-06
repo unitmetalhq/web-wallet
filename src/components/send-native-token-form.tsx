@@ -33,6 +33,7 @@ import type { ActivityRecord } from "@/types/activity";
 import { TransactionStatus } from "@/components/transaction-status";
 import AddressBookPickerButton from "@/components/address-book-picker-button";
 import QrScannerButton from "@/components/qr-scanner-button";
+import { InformationDialog } from "@/components/information-dialog";
 
 
 export default function SendNativeTokenForm() {
@@ -284,7 +285,7 @@ export default function SendNativeTokenForm() {
                         field.handleChange(
                           formatEther(
                             ((nativeBalance?.value || BigInt(0)) * BigInt(3)) /
-                              BigInt(4)
+                            BigInt(4)
                           )
                         )
                       }
@@ -379,8 +380,12 @@ export default function SendNativeTokenForm() {
             {(field) => {
               return (
                 <div className="flex flex-col gap-2">
-                  <div className="flex flex-row gap-2 items-center justify-between">
+                  <div className="flex flex-row gap-2 items-center">
                     <p className="text-muted-foreground">Recipient</p>
+                    <InformationDialog
+                      title="Recipient"
+                      content="Enter the address of the recipient. You can also enter an ENS name to resolve it to an address. Make sure to click the search icon to resolve the ENS name after input."
+                    />
                   </div>
                   <InputGroup className="border-primary">
                     <InputGroupInput
@@ -392,6 +397,10 @@ export default function SendNativeTokenForm() {
                       placeholder="Address (0x...) or ENS (.eth)"
                       className="text-base rounded-none"
                       required
+                      autoComplete="off"
+                      data-1p-ignore
+                      data-lpignore="true"
+                      data-form-type="other"
                     />
                     <InputGroupAddon align="inline-end">
                       <InputGroupButton
@@ -588,12 +597,11 @@ function AmountFieldInfo({ field }: { field: AnyFieldApi }) {
         <em>Please enter an amount to send</em>
       ) : field.state.meta.isTouched && !field.state.meta.isValid ? (
         <em
-          className={`${
-            field.state.meta.errors.join(",") ===
+          className={`${field.state.meta.errors.join(",") ===
             "Please enter an amount to send"
-              ? ""
-              : "text-red-400"
-          }`}
+            ? ""
+            : "text-red-400"
+            }`}
         >
           {field.state.meta.errors.join(",")}
         </em>
@@ -622,12 +630,11 @@ function ReceivingAddressFieldInfo({
         <em>Please enter an address or ENS</em>
       ) : field.state.meta.isTouched && !field.state.meta.isValid ? (
         <em
-          className={`${
-            field.state.meta.errors.join(",") ===
+          className={`${field.state.meta.errors.join(",") ===
             "Please enter an address or ENS"
-              ? ""
-              : "text-red-400"
-          }`}
+            ? ""
+            : "text-red-400"
+            }`}
         >
           {field.state.meta.errors.join(",")}
         </em>
@@ -654,12 +661,11 @@ function PasswordFieldInfo({ field }: { field: AnyFieldApi }) {
         <em>Please enter your wallet password</em>
       ) : field.state.meta.isTouched && !field.state.meta.isValid ? (
         <em
-          className={`${
-            field.state.meta.errors.join(",") ===
+          className={`${field.state.meta.errors.join(",") ===
             "Please enter your wallet password"
-              ? ""
-              : "text-red-400"
-          }`}
+            ? ""
+            : "text-red-400"
+            }`}
         >
           {field.state.meta.errors.join(",")}
         </em>
