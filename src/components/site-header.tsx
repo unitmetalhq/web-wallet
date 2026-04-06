@@ -49,7 +49,6 @@ export default function SiteHeader() {
             onClick={handleLogout}
             variant="outline"
             className="rounded-none hover:cursor-pointer w-fit"
-            size="icon"
           >
             <LogOut />
             <Kbd>O</Kbd>

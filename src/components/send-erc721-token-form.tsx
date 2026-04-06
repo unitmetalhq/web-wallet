@@ -6,6 +6,9 @@ import { Input } from "@/components/ui/input";
 import { useForm, useStore } from "@tanstack/react-form";
 import type { AnyFieldApi } from "@tanstack/react-form";
 import { Loader2, Check, Search } from "lucide-react";
+import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from "@/components/ui/input-group";
+import QrScannerButton from "@/components/qr-scanner-button";
+import AddressBookPickerButton from "@/components/address-book-picker-button";
 import { type Address, erc721Abi } from "viem";
 import {
   useConfig,
@@ -282,31 +285,33 @@ export default function SendErc721TokenForm() {
                 <div className="flex flex-row gap-2 items-center justify-between">
                   <p className="text-muted-foreground">NFT Contract</p>
                 </div>
-                <div className="flex flex-row gap-2">
-                  <Input
+                <InputGroup className="border-primary">
+                  <InputGroupInput
                     id={field.name}
                     name={field.name}
                     value={field.state.value || ""}
                     onChange={(e) => field.handleChange(e.target.value)}
-                    className="rounded-none"
                     type="text"
                     placeholder="Address (0x...) or ENS (.eth)"
+                    className="text-base rounded-none"
                     required
                   />
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="rounded-none hover:cursor-pointer"
-                    type="button"
-                    onClick={() => refetchTokenEnsAddress()}
-                  >
-                    {isLoadingTokenEnsAddress ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <Search />
-                    )}
-                  </Button>
-                </div>
+                  <InputGroupAddon align="inline-end">
+                    <InputGroupButton
+                      type="button"
+                      onClick={() => refetchTokenEnsAddress()}
+                      title="Look up ENS"
+                      className="hover:cursor-pointer"
+                    >
+                      {isLoadingTokenEnsAddress ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Search className="w-3.5 h-3.5" />
+                      )}
+                    </InputGroupButton>
+                    <QrScannerButton onScan={(address) => field.handleChange(address)} />
+                  </InputGroupAddon>
+                </InputGroup>
                 <TokenAddressFieldInfo
                   field={field}
                   ensAddress={tokenEnsAddress}
@@ -426,31 +431,34 @@ export default function SendErc721TokenForm() {
                 <div className="flex flex-row gap-2 items-center justify-between">
                   <p className="text-muted-foreground">Recipient</p>
                 </div>
-                <div className="flex flex-row gap-2">
-                  <Input
+                <InputGroup className="border-primary">
+                  <InputGroupInput
                     id={field.name}
                     name={field.name}
                     value={field.state.value || ""}
                     onChange={(e) => field.handleChange(e.target.value)}
-                    className="rounded-none"
                     type="text"
                     placeholder="Address (0x...) or ENS (.eth)"
+                    className="text-base rounded-none"
                     required
                   />
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="rounded-none hover:cursor-pointer"
-                    type="button"
-                    onClick={() => refetchEnsAddress()}
-                  >
-                    {isLoadingEnsAddress ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <Search />
-                    )}
-                  </Button>
-                </div>
+                  <InputGroupAddon align="inline-end">
+                    <InputGroupButton
+                      type="button"
+                      onClick={() => refetchEnsAddress()}
+                      title="Look up ENS"
+                      className="hover:cursor-pointer"
+                    >
+                      {isLoadingEnsAddress ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Search className="w-3.5 h-3.5" />
+                      )}
+                    </InputGroupButton>
+                    <QrScannerButton onScan={(address) => field.handleChange(address)} />
+                    <AddressBookPickerButton onSelect={(address) => field.handleChange(address)} />
+                  </InputGroupAddon>
+                </InputGroup>
                 <ReceivingAddressFieldInfo
                   field={field}
                   ensAddress={ensAddress}

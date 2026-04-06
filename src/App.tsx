@@ -7,7 +7,8 @@ import BackupWallet from "@/components/keystore-wallet";
 import MobileNavbar from "@/components/mobile-navbar";
 import WalletSettings from "@/components/wallet-settings";
 import ManageAddressBook from "@/components/manage-address-book";
-import Activity from "@/components/activity";
+import OutgoingActivity from "@/components/outgoing-activity";
+import IncomingActivity from "@/components/incoming-activity";
 import LocalDeviceBackup from "@/components/local-device-backup";
 import CloudSync from "@/components/cloud-sync";
 
@@ -35,8 +36,9 @@ export default function App() {
           </div>
         )}
         {desktopTab === "activity" && (
-          <div className="w-[760px] mx-auto">
-            <Activity />
+          <div className="grid lg:grid-cols-2 gap-4 w-full">
+            <OutgoingActivity />
+            <IncomingActivity />
           </div>
         )}
         {desktopTab === "backup" && (

@@ -5,7 +5,8 @@ import SendTokens from "@/components/send-tokens";
 import Balances from "@/components/balances";
 import WalletSettings from "@/components/wallet-settings";
 import ManageAddressBook from "@/components/manage-address-book";
-import Activity from "@/components/activity";
+import OutgoingActivity from "@/components/outgoing-activity";
+import IncomingActivity from "@/components/incoming-activity";
 import LocalDeviceBackup from "@/components/local-device-backup";
 import CloudSync from "@/components/cloud-sync";
 import { Wallet, BookUser, ArrowUpRight, TableProperties, Save, Settings } from "lucide-react";
@@ -26,7 +27,7 @@ export default function MobileNavbar() {
   const [activeTab, setActiveTab] = useState<Tab>("wallets");
 
   return (
-    <div className="flex flex-col w-full md:hidden">
+    <div className="flex flex-col w-full lg:hidden">
       <div className="flex-1 pb-16">
         {activeTab === "wallets" && (
           <div className="flex flex-col gap-4">
@@ -36,7 +37,12 @@ export default function MobileNavbar() {
         )}
         {activeTab === "address-book" && <ManageAddressBook />}
         {activeTab === "send" && <SendTokens />}
-        {activeTab === "activity" && <Activity />}
+        {activeTab === "activity" && (
+          <div className="grid grid-cols-1 gap-4">
+            <OutgoingActivity />
+            <IncomingActivity />
+          </div>
+        )}
         {activeTab === "backup" && (
           <div className="grid grid-cols-1 gap-4">
             <KeystoreWallet />
