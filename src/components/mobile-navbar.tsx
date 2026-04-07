@@ -28,7 +28,7 @@ export default function MobileNavbar() {
 
   return (
     <div className="flex flex-col w-full lg:hidden">
-      <div className="flex-1 pb-16">
+      <div className="flex-1 pb-24">
         {activeTab === "wallets" && (
           <div className="flex flex-col gap-4">
             <ManageWallet />
@@ -53,7 +53,7 @@ export default function MobileNavbar() {
         {activeTab === "settings" && <WalletSettings />}
       </div>
 
-      <div className="fixed bottom-0 left-0 right-0 border-t-2 border-primary bg-background grid grid-cols-6">
+      <div className="fixed bottom-0 left-0 right-0 border-t-2 border-primary bg-background grid grid-cols-6" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 8px)' }}>
         {TABS.map((tab) => {
           const Icon = tab.icon;
           return (
@@ -61,7 +61,7 @@ export default function MobileNavbar() {
               key={tab.id}
               type="button"
               onClick={() => setActiveTab(tab.id)}
-              className={`py-3 flex items-center justify-center hover:cursor-pointer transition-colors ${
+              className={`pt-3 pb-1 flex items-center justify-center hover:cursor-pointer transition-colors ${
                 activeTab === tab.id
                   ? "bg-primary text-secondary"
                   : "text-muted-foreground hover:text-foreground"
