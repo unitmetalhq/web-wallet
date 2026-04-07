@@ -100,7 +100,7 @@ export default function DeleteWallet() {
                   onChange={(e) => field.handleChange(e.target.value)}
                   type="password"
                   placeholder="Password"
-                  className="rounded-none border-primary"
+                  className="rounded-none border-primary text-base"
                   required
                 />
                 <PasswordFieldInfo field={field} />

@@ -127,7 +127,7 @@ export default function ExportWallet() {
                     onChange={(e) => field.handleChange(e.target.value)}
                     type="password"
                     placeholder="Password"
-                    className="rounded-none border-primary"
+                    className="rounded-none border-primary text-base"
                     required
                   />
                   <PasswordFieldInfo field={field} />
@@ -175,7 +175,7 @@ export default function ExportWallet() {
           <Textarea
             value={exportedSecretPhrase || ""}
             placeholder="Your exported secret phrase"
-            className="rounded-none border-primary"
+            className="rounded-none border-primary text-base"
             readOnly
             rows={10}
           />

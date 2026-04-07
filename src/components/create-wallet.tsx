@@ -79,7 +79,7 @@ export default function CreateWallet() {
                   onChange={(e) => field.handleChange(e.target.value)}
                   type="text"
                   placeholder="Wallet name"
-                  className="rounded-none border-primary"
+                  className="rounded-none border-primary text-base"
                   required
                 />
                 <NameFieldInfo field={field} />
@@ -102,7 +102,7 @@ export default function CreateWallet() {
                   onChange={(e) => field.handleChange(e.target.value)}
                   type="password"
                   placeholder="Strong password"
-                  className="rounded-none border-primary"
+                  className="rounded-none border-primary text-base"
                   required
                 />
                 <PasswordFieldInfo field={field} />

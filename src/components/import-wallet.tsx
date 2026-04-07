@@ -85,8 +85,9 @@ export default function ImportWallet() {
       const encryptedWithMeta = {
         ...encrypted,
         meta: {
-          type: "secret-phrase",
+          type: "password-keystore-seedphrase",
           note: "the 12 words secret phrase (aka mnemonic phrase) is encrypted with the password using the keystore encryption process",
+          umVersion: "0.0.1",
         },
         name: value.name,
         address: address,
@@ -132,7 +133,7 @@ export default function ImportWallet() {
         </h3>
         <Textarea
           placeholder="Paste your keystore file content here"
-          className="rounded-none border-primary"
+          className="rounded-none border-primary text-base"
           onChange={(e) => setPastedKeystore(e.target.value)}
           value={pastedKeystore || ""}
         />
@@ -172,7 +173,7 @@ export default function ImportWallet() {
                     onChange={(e) => field.handleChange(e.target.value)}
                     type="text"
                     placeholder="Wallet name"
-                    className="rounded-none border-primary"
+                    className="rounded-none border-primary text-base"
                     required
                   />
                   <NameFieldInfo field={field} />
@@ -195,7 +196,7 @@ export default function ImportWallet() {
                     onChange={(e) => field.handleChange(e.target.value)}
                     type="password"
                     placeholder="Strong password"
-                    className="rounded-none border-primary"
+                    className="rounded-none border-primary text-base"
                     required
                   />
                   <PasswordFieldInfo field={field} />
@@ -215,7 +216,7 @@ export default function ImportWallet() {
                     id={field.name}
                     name={field.name}
                     value={field.state.value || ""}
-                    className="rounded-none border-primary"
+                    className="rounded-none border-primary text-base"
                     onChange={(e) => field.handleChange(e.target.value)}
                     placeholder="Enter your secret phrase here"
                     required
