@@ -36,8 +36,9 @@ export default function CreateWallet() {
       const encryptedWithMeta = {
         ...encrypted,
         meta: {
-          type: "secret-phrase",
+          type: "password-keystore-seedphrase",
           note: "the 12 words secret phrase (aka mnemonic phrase) is encrypted with the password using the keystore encryption process",
+          umVersion: "0.0.1",
         },
         name: value.name,
         address: address,
