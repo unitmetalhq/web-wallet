@@ -8,6 +8,7 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { mainnet } from "wagmi/chains";
 import { Save, Trash2, RefreshCw, Check } from "lucide-react";
+import { validateUrl } from "@/lib/settings";
 
 const DEFAULT_RPC_URL = import.meta.env.VITE_MAINNET_RPC_URL as string;
 
@@ -18,19 +19,6 @@ export default function WalletSettings() {
   const [newName, setNewName] = useState("");
   const [newUrl, setNewUrl] = useState("");
   const [addError, setAddError] = useState<string | null>(null);
-
-  function validateUrl(url: string): string | null {
-    if (!url.trim()) return "RPC URL is required";
-    try {
-      const parsed = new URL(url.trim());
-      if (!["http:", "https:"].includes(parsed.protocol)) {
-        return "RPC URL must use http or https";
-      }
-    } catch {
-      return "Invalid URL";
-    }
-    return null;
-  }
 
   function handleAdd() {
     const err = validateUrl(newUrl);
