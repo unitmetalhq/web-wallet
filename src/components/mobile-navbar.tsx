@@ -28,7 +28,7 @@ export default function MobileNavbar() {
 
   return (
     <div className="flex flex-col w-full lg:hidden">
-      <div className="flex-1 pb-24">
+      <div className="flex-1 pb-16">
         {activeTab === "wallets" && (
           <div className="flex flex-col gap-4">
             <ManageWallet />
@@ -61,7 +61,7 @@ export default function MobileNavbar() {
               key={tab.id}
               type="button"
               onClick={() => setActiveTab(tab.id)}
-              className={`pt-3 pb-1 flex items-center justify-center hover:cursor-pointer transition-colors ${
+              className={`pt-3 pb-8 flex items-center justify-center hover:cursor-pointer transition-colors ${
                 activeTab === tab.id
                   ? "bg-primary text-secondary"
                   : "text-muted-foreground hover:text-foreground"
