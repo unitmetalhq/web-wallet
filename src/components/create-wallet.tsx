@@ -1,8 +1,10 @@
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from "@/components/ui/input-group";
 import { useForm } from "@tanstack/react-form";
 import type { AnyFieldApi } from "@tanstack/react-form";
-import { Loader2 } from "lucide-react";
+import { Loader2, Eye, EyeOff } from "lucide-react";
 import { Mnemonic, Keystore, Bytes } from "ox";
 import { useSetAtom } from "jotai";
 import { walletsAtom } from "@/atoms/walletsAtom";
@@ -11,6 +13,7 @@ import { mnemonicToAccount } from "viem/accounts";
 
 export default function CreateWallet() {
   const setWallets = useSetAtom(walletsAtom);
+  const [showPassword, setShowPassword] = useState(false);
 
   const form = useForm({
     defaultValues: {
@@ -95,16 +98,31 @@ export default function CreateWallet() {
           >
             {(field) => (
               <div className="flex flex-col gap-2">
-                <Input
-                  id={field.name}
-                  name={field.name}
-                  value={field.state.value || ""}
-                  onChange={(e) => field.handleChange(e.target.value)}
-                  type="password"
-                  placeholder="Strong password"
-                  className="rounded-none border-primary text-base"
-                  required
-                />
+                <InputGroup className="border-primary">
+                  <InputGroupInput
+                    id={field.name}
+                    name={field.name}
+                    value={field.state.value || ""}
+                    onChange={(e) => field.handleChange(e.target.value)}
+                    type={showPassword ? "text" : "password"}
+                    placeholder="Strong password"
+                    className="text-base"
+                    required
+                  />
+                  <InputGroupAddon align="inline-end">
+                    <InputGroupButton
+                      type="button"
+                      onClick={() => setShowPassword((v) => !v)}
+                      className="hover:cursor-pointer"
+                    >
+                      {showPassword ? (
+                        <EyeOff className="w-3.5 h-3.5" />
+                      ) : (
+                        <Eye className="w-3.5 h-3.5" />
+                      )}
+                    </InputGroupButton>
+                  </InputGroupAddon>
+                </InputGroup>
                 <PasswordFieldInfo field={field} />
               </div>
             )}

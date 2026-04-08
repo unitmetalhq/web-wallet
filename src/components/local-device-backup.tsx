@@ -7,8 +7,11 @@ import { contactsAtom } from "@/atoms/contactsAtom";
 import { settingsAtom } from "@/atoms/settingsAtom";
 import { db } from "@/lib/db";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Loader2, Download } from "lucide-react";
+import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from "@/components/ui/input-group";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { useForm } from "@tanstack/react-form";
+import type { AnyFieldApi } from "@tanstack/react-form";
+import { Loader2, Download, Eye, EyeOff } from "lucide-react";
 
 // ── Backup file format ───────────────────────────────────────────────────────
 //
@@ -31,7 +34,6 @@ interface UmWalletBackup {
   format: "um-wallet-backup";
   version: 1;
   createdAt: string;         // ISO 8601
-  email?: string;            // optional, stored in plaintext for future use
   encryption: {
     kdf: "PBKDF2";
     kdfHash: "SHA-256";
@@ -45,35 +47,22 @@ interface UmWalletBackup {
 
 import { KDF_ITERATIONS, encrypt } from "@/lib/crypto";
 
-// ── Component ────────────────────────────────────────────────────────────────
+// ── Export tab ───────────────────────────────────────────────────────────────
 
-export default function BackupAll() {
+function ExportBackup() {
   const wallets = useAtomValue(walletsAtom);
   const activeWallet = useAtomValue(activeWalletAtom);
   const contacts = useAtomValue(contactsAtom);
   const settings = useAtomValue(settingsAtom);
   const activity = useLiveQuery(() => db.activity.toArray(), []);
 
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [email, setEmail] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
-  async function handleBackup() {
-    setError(null);
-
-    if (!password) {
-      setError("Password is required.");
-      return;
-    }
-    if (password !== confirmPassword) {
-      setError("Passwords do not match.");
-      return;
-    }
-
-    setLoading(true);
-    try {
+  const form = useForm({
+    defaultValues: {
+      password: "",
+    },
+    onSubmit: async ({ value }) => {
       const plaintext = JSON.stringify({
         wallets,
         activeWalletAddress: activeWallet?.address ?? null,
@@ -82,13 +71,12 @@ export default function BackupAll() {
         activity: activity ?? [],
       });
 
-      const { kdfSalt, iv, data } = await encrypt(plaintext, password);
+      const { kdfSalt, iv, data } = await encrypt(plaintext, value.password);
 
       const backup: UmWalletBackup = {
         format: "um-wallet-backup",
         version: 1,
         createdAt: new Date().toISOString(),
-        ...(email ? { email } : {}),
         encryption: {
           kdf: "PBKDF2",
           kdfHash: "SHA-256",
@@ -110,81 +98,141 @@ export default function BackupAll() {
       a.click();
       URL.revokeObjectURL(url);
 
-      setPassword("");
-      setConfirmPassword("");
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Encryption failed.");
-    } finally {
-      setLoading(false);
-    }
-  }
+      form.reset();
+    },
+  });
 
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-1 text-xs text-muted-foreground">
+        <p>
+          Exports all wallets, contacts, settings, and activity into an encrypted <span className="font-mono">.json</span> backup.
+          Encrypted with AES-GCM 256-bit + PBKDF2 (600,000 iterations).
+        </p>
+        <p>Keep your password safe — it cannot be recovered.</p>
+      </div>
+
+      <div className="grid grid-cols-2 gap-1 text-xs border border-border p-3">
+        <span className="text-muted-foreground">Wallets</span>
+        <span className="font-mono">{wallets.length}</span>
+        <span className="text-muted-foreground">Contacts</span>
+        <span className="font-mono">{contacts.length}</span>
+        <span className="text-muted-foreground">Activity records</span>
+        <span className="font-mono">{activity?.length ?? 0}</span>
+      </div>
+
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          form.handleSubmit();
+        }}
+        className="flex flex-col gap-2"
+      >
+        <form.Field
+          name="password"
+          validators={{
+            onChange: ({ value }) =>
+              !value ? "Please enter a password" : undefined,
+          }}
+        >
+          {(field) => (
+            <div className="flex flex-col gap-1">
+              <InputGroup className="border-primary">
+                <InputGroupInput
+                  id={field.name}
+                  name={field.name}
+                  value={field.state.value}
+                  onChange={(e) => field.handleChange(e.target.value)}
+                  type={showPassword ? "text" : "password"}
+                  placeholder="Backup password"
+                  className="text-base"
+                  required
+                />
+                <InputGroupAddon align="inline-end">
+                  <InputGroupButton
+                    type="button"
+                    onClick={() => setShowPassword((v) => !v)}
+                    className="hover:cursor-pointer"
+                  >
+                    {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                  </InputGroupButton>
+                </InputGroupAddon>
+              </InputGroup>
+              <FieldInfo field={field} placeholder="Please enter a password" />
+            </div>
+          )}
+        </form.Field>
+
+        <form.Subscribe selector={(state) => [state.canSubmit, state.isSubmitting]}>
+          {([canSubmit, isSubmitting]) => (
+            <Button
+              type="submit"
+              className="rounded-none hover:cursor-pointer"
+              disabled={!canSubmit || isSubmitting}
+            >
+              {isSubmitting ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <>
+                  <Download className="w-4 h-4" />
+                  Download backup
+                </>
+              )}
+            </Button>
+          )}
+        </form.Subscribe>
+      </form>
+    </div>
+  );
+}
+
+// ── Import tab ───────────────────────────────────────────────────────────────
+
+function ImportBackup() {
+  return (
+    <p className="text-sm text-muted-foreground">Coming soon.</p>
+  );
+}
+
+// ── Root component ───────────────────────────────────────────────────────────
+
+export default function LocalDeviceBackup() {
   return (
     <div className="flex flex-col border-2 border-primary gap-2 pb-8 h-fit">
       <div className="flex flex-row justify-between items-center bg-primary text-secondary pl-1">
         <h1 className="text-md font-bold">Local device backup</h1>
       </div>
-
-      <div className="flex flex-col gap-4 px-4 py-2">
-        <div className="flex flex-col gap-1 text-xs text-muted-foreground">
-          <p>
-            Exports all wallets, contacts, settings, and activity into an encrypted <span className="font-mono">.json</span> backup.
-            Encrypted with AES-GCM 256-bit + PBKDF2 (600,000 iterations).
-          </p>
-          <p>Keep your password safe — it cannot be recovered.</p>
-        </div>
-
-        <div className="grid grid-cols-2 gap-1 text-xs border border-border p-3">
-          <span className="text-muted-foreground">Wallets</span>
-          <span className="font-mono">{wallets.length}</span>
-          <span className="text-muted-foreground">Contacts</span>
-          <span className="font-mono">{contacts.length}</span>
-          <span className="text-muted-foreground">Activity records</span>
-          <span className="font-mono">{activity?.length ?? 0}</span>
-        </div>
-
-        <div className="flex flex-col gap-2">
-          <Input
-            type="password"
-            placeholder="Backup password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="rounded-none border-primary text-base"
-          />
-          <Input
-            type="password"
-            placeholder="Confirm password"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            className="rounded-none border-primary text-base"
-          />
-          <Input
-            type="email"
-            placeholder="Email (optional)"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="rounded-none border-primary text-base"
-          />
-        </div>
-
-        {error && <p className="text-xs text-red-400">{error}</p>}
-
-        <Button
-          type="button"
-          className="rounded-none hover:cursor-pointer"
-          onClick={handleBackup}
-          disabled={loading}
-        >
-          {loading ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
-          ) : (
-            <>
-              <Download className="w-4 h-4" />
-              Download backup
-            </>
-          )}
-        </Button>
+      <div className="px-4 py-2">
+        <Tabs defaultValue="export" className="w-full">
+          <TabsList className="border-primary border rounded-none">
+            <TabsTrigger className="rounded-none" value="export">Export</TabsTrigger>
+            <TabsTrigger className="rounded-none" value="import">Import</TabsTrigger>
+          </TabsList>
+          <TabsContent value="export">
+            <ExportBackup />
+          </TabsContent>
+          <TabsContent value="import">
+            <ImportBackup />
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
+  );
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function FieldInfo({ field, placeholder }: { field: AnyFieldApi; placeholder: string }) {
+  return (
+    <>
+      {!field.state.meta.isTouched ? (
+        <em className="text-xs text-muted-foreground">{placeholder}</em>
+      ) : !field.state.meta.isValid ? (
+        <em className="text-xs text-red-400">{field.state.meta.errors.join(", ")}</em>
+      ) : (
+        <em className="text-xs text-green-500">ok!</em>
+      )}
+    </>
   );
 }

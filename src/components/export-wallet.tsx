@@ -6,8 +6,8 @@ import type { UmKeystore } from "@/types/wallet";
 import { walletsAtom } from "@/atoms/walletsAtom";
 import { activeWalletAtom } from "@/atoms/activeWalletAtom";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Loader2 } from "lucide-react";
+import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from "@/components/ui/input-group";
+import { Loader2, Eye, EyeOff } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Keystore, Bytes } from "ox";
 import CopyButton from "@/components/copy-button";
@@ -18,6 +18,7 @@ export default function ExportWallet() {
   const [exportedSecretPhrase, setExportedSecretPhrase] = useState<
     string | null
   >(null);
+  const [showPassword, setShowPassword] = useState(false);
 
   function downloadAllKeystores() {
     const blob = new Blob([JSON.stringify(wallets, null, 2)], {
@@ -120,16 +121,31 @@ export default function ExportWallet() {
             >
               {(field) => (
                 <div className="flex flex-col gap-2">
-                  <Input
-                    id={field.name}
-                    name={field.name}
-                    value={field.state.value || ""}
-                    onChange={(e) => field.handleChange(e.target.value)}
-                    type="password"
-                    placeholder="Password"
-                    className="rounded-none border-primary text-base"
-                    required
-                  />
+                  <InputGroup className="border-primary">
+                    <InputGroupInput
+                      id={field.name}
+                      name={field.name}
+                      value={field.state.value || ""}
+                      onChange={(e) => field.handleChange(e.target.value)}
+                      type={showPassword ? "text" : "password"}
+                      placeholder="Password"
+                      className="text-base"
+                      required
+                    />
+                    <InputGroupAddon align="inline-end">
+                      <InputGroupButton
+                        type="button"
+                        onClick={() => setShowPassword((v) => !v)}
+                        className="hover:cursor-pointer"
+                      >
+                        {showPassword ? (
+                          <EyeOff className="w-3.5 h-3.5" />
+                        ) : (
+                          <Eye className="w-3.5 h-3.5" />
+                        )}
+                      </InputGroupButton>
+                    </InputGroupAddon>
+                  </InputGroup>
                   <PasswordFieldInfo field={field} />
                 </div>
               )}

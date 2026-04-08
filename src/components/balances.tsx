@@ -215,10 +215,9 @@ export default function Balances() {
       <div className="flex flex-row justify-between items-center bg-primary text-secondary pl-1">
         <h1 className="text-md font-bold">Balances</h1>
       </div>
-
-      <Tabs defaultValue="token" className="px-0 gap-0">
-        <div className="flex flex-row items-center justify-between mx-4 mb-2">
-          <TabsList>
+      <Tabs defaultValue="token" className="w-full">
+        <div className="flex flex-row items-center justify-between p-4">
+          <TabsList className="border-primary border rounded-none">
             <TabsTrigger value="token">Token</TabsTrigger>
             <TabsTrigger value="nft">NFT</TabsTrigger>
           </TabsList>
