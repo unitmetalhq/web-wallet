@@ -120,6 +120,7 @@ export default function KeystoreWallet() {
             </TabsTrigger>
           </TabsList>
           <TabsContent value="encrypt" className="flex flex-col gap-2">
+            <p className="text-muted-foreground text-xs">Convert any mnemonic phrase to a keystore</p>
             <form
               onSubmit={(e) => {
                 e.preventDefault();
@@ -144,7 +145,7 @@ export default function KeystoreWallet() {
                         onChange={(e) => field.handleChange(e.target.value)}
                         type="text"
                         placeholder="Wallet name"
-                        className="rounded-none border-primary"
+                        className="rounded-none border-primary text-base"
                         required
                       />
                       <NameFieldInfo field={field} />
@@ -167,7 +168,7 @@ export default function KeystoreWallet() {
                         onChange={(e) => field.handleChange(e.target.value)}
                         type="password"
                         placeholder="Strong password"
-                        className="rounded-none border-primary"
+                        className="rounded-none border-primary text-base"
                         required
                       />
                       <PasswordFieldInfo field={field} />
@@ -190,7 +191,7 @@ export default function KeystoreWallet() {
                         onChange={(e) => field.handleChange(e.target.value)}
                         type="text"
                         placeholder="Mnemonic phrase"
-                        className="rounded-none border-primary"
+                        className="rounded-none border-primary text-base"
                         required
                       />
                       <MnemonicPhraseFieldInfo field={field} />
@@ -274,6 +275,7 @@ export default function KeystoreWallet() {
             </div>
           </TabsContent>
           <TabsContent value="decrypt" className="flex flex-col gap-2">
+            <p className="text-muted-foreground text-xs">Decrypt any keystore to a mnemonic phrase</p>
             <form
               onSubmit={(e) => {
                 e.preventDefault();
