@@ -100,13 +100,16 @@ export default function ManageWallet() {
             >
               <QrCode />
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="w-[calc(100%-2rem)] sm:max-w-[420px]">
               <DialogHeader>
                 <DialogTitle>QR Code</DialogTitle>
               </DialogHeader>
               <div className="flex flex-col items-center gap-4">
-                <div className="w-[200px] h-[200px]">
-                  <Cuer arena="/icon.svg" value={activeWallet?.address || ""} />
+                <div className="w-full aspect-square bg-white p-3">
+                  <Cuer.Root value={activeWallet?.address || ""} className="w-full h-full">
+                    <Cuer.Finder radius={0} fill="#000000" />
+                    <Cuer.Cells radius={0} fill="#000000" />
+                  </Cuer.Root>
                 </div>
                 <p className="text-xs font-mono break-all text-center text-muted-foreground">
                   {activeWallet?.address}
