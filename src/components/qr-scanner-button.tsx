@@ -56,6 +56,7 @@ export default function QrScannerButton({
         const parsed = parseQrAddress(result.data);
         if (parsed) {
           onScan(parsed);
+          stopScanner();
           setOpen(false);
         }
       },
