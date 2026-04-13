@@ -5,7 +5,9 @@ import SendTokens from "@/components/send-tokens";
 import Balances from "@/components/balances";
 import BackupWallet from "@/components/keystore-wallet";
 import MobileNavbar from "@/components/mobile-navbar";
-import WalletSettings from "@/components/wallet-settings";
+import RpcSettings from "@/components/rpc-settings";
+import OfflineSettings from "@/components/offline-settings";
+import VpnSettings from "@/components/vpn-settings";
 import ManageAddressBook from "@/components/manage-address-book";
 import OutgoingActivity from "@/components/outgoing-activity";
 import IncomingActivity from "@/components/incoming-activity";
@@ -49,8 +51,18 @@ export default function App() {
           </div>
         )}
         {desktopTab === "settings" && (
-          <div className="w-[760px] mx-auto">
-            <WalletSettings />
+          <div className="grid lg:grid-cols-2 gap-4 items-start">
+            <div className="border-2 border-primary p-4">
+              <RpcSettings />
+            </div>
+            <div className="flex flex-col gap-4">
+              <div className="border-2 border-primary p-4">
+                <OfflineSettings />
+              </div>
+              <div className="border-2 border-primary p-4">
+                <VpnSettings />
+              </div>
+            </div>
           </div>
         )}
       </div>
